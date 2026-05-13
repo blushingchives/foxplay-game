@@ -1,0 +1,11 @@
+sudo podman build -t fabric-mc .
+sudo podman stop -a && sudo podman rm -a
+sudo podman exec -it fabric-mc bash
+sudo podman rmi -a
+sudo podman run --name paper-mc -p 25565:25565/tcp -p 25565:25565/udp --memory 2g --cpus 2 --replace paper-mc
+sudo podman run --name fabric-mc -p 25565:25565 --memory 2g --cpus 1 --replace fabric-mc
+
+wget -q -O - --post-data='{}' --header='Content-Type: application/json' http://localhost:8080/status
+
+echo '{"jsonrpc":"2.0","method":"minecraft:serversettings/game_mode/set","id":1,"params":{"mode":"creative"}}' | websocat -H='Authorization: Bearer tPiEVVPAyVyoL6OEL3IZRdsBKYeMpPA4P8l7hoe3' - ws://localhost:25575
+echo '{"jsonrpc":"2.0","method":"minecraft:operators/add","id":1,"params":[[{"player":{"name":"Spaceyisawe"}}]]}' | websocat -H='Authorization: Bearer tPiEVVPAyVyoL6OEL3IZRdsBKYeMpPA4P8l7hoe3' - ws://localhost:25575
