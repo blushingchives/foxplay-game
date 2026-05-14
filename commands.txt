@@ -9,3 +9,8 @@ wget -q -O - --post-data='{}' --header='Content-Type: application/json' http://l
 
 echo '{"jsonrpc":"2.0","method":"minecraft:serversettings/game_mode/set","id":1,"params":{"mode":"creative"}}' | websocat -H='Authorization: Bearer tPiEVVPAyVyoL6OEL3IZRdsBKYeMpPA4P8l7hoe3' - ws://localhost:25575
 echo '{"jsonrpc":"2.0","method":"minecraft:operators/add","id":1,"params":[[{"player":{"name":"Spaceyisawe"}}]]}' | websocat -H='Authorization: Bearer tPiEVVPAyVyoL6OEL3IZRdsBKYeMpPA4P8l7hoe3' - ws://localhost:25575
+
+
+
+sudo podman build -t satisfactory . && sudo podman run --name satisfactory -p 25565:25565 --replace satisfactory
+

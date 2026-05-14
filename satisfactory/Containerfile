@@ -1,0 +1,22 @@
+FROM debian:bookworm-slim
+
+RUN sed -i 's/^Components: main$/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources \
+    && dpkg --add-architecture i386 \
+    && apt-get update \
+    && echo "steamcmd steam/question select I AGREE" | debconf-set-selections \
+    && echo "steamcmd steam/license note ''" | debconf-set-selections \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y wget jq steamcmd libcurl4 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m steam
+
+USER steam
+
+RUN /usr/games/steamcmd +login anonymous +quit
+RUN /usr/games/steamcmd +force_install_dir /home/steam/SatisfactoryDedicatedServer +login anonymous +app_update 1690800 validate +quit
+
+# Start script
+CMD ["/home/steam/SatisfactoryDedicatedServer/FactoryServer.sh", "-unattended"]
+
+# Container setup
+EXPOSE 7777
+VOLUME /satisfactory
