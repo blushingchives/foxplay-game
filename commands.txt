@@ -12,5 +12,5 @@ echo '{"jsonrpc":"2.0","method":"minecraft:operators/add","id":1,"params":[[{"pl
 
 
 
-sudo podman build -t satisfactory . && sudo podman run --name satisfactory -p 25565:25565 --replace satisfactory
+sudo podman build -t satisfactory . && sudo podman run --name satisfactory -p 7777:7777/tcp -p 7777:7777/udp -p 8888:8888/tcp --replace satisfactory
 

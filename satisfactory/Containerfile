@@ -1,22 +1,25 @@
+FROM steamcmd/steamcmd:latest AS downloader
+
+RUN steamcmd \
+    +force_install_dir /opt/satisfactory \
+    +login anonymous \
+    +app_update 1690800 validate \
+    +quit
+
 FROM debian:bookworm-slim
 
-RUN sed -i 's/^Components: main$/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources \
-    && dpkg --add-architecture i386 \
-    && apt-get update \
-    && echo "steamcmd steam/question select I AGREE" | debconf-set-selections \
-    && echo "steamcmd steam/license note ''" | debconf-set-selections \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y wget jq steamcmd libcurl4 \
+RUN apt-get update \
+    && apt-get install -y libcurl4 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -m steam
 
+COPY --from=downloader --chown=steam:steam /opt/satisfactory /home/steam/SatisfactoryDedicatedServer
+
 USER steam
 
-RUN /usr/games/steamcmd +login anonymous +quit
-RUN /usr/games/steamcmd +force_install_dir /home/steam/SatisfactoryDedicatedServer +login anonymous +app_update 1690800 validate +quit
+CMD ["/home/steam/SatisfactoryDedicatedServer/FactoryServer.sh"]
 
-# Start script
-CMD ["/home/steam/SatisfactoryDedicatedServer/FactoryServer.sh", "-unattended"]
-
-# Container setup
-EXPOSE 7777
-VOLUME /satisfactory
+EXPOSE 7777/tcp
+EXPOSE 7777/udp
+EXPOSE 8888/tcp
+VOLUME /home/steam/.config/Epic/FactoryGame/Saved
