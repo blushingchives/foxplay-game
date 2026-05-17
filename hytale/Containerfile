@@ -1,0 +1,19 @@
+FROM alpine:latest
+
+ENV JAVA_OPTS=""
+
+COPY start.sh .
+
+RUN apk update \
+    && apk add libstdc++ \
+    && apk add openjdk25-jre \
+    && apk add bash \
+    && apk add wget \
+    && apk add jq \
+    && apk add unzip \
+    && mkdir /hytale
+
+CMD ["bash", "/start.sh"]
+
+EXPOSE 5520/udp
+VOLUME /hytale
