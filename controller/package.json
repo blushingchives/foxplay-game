@@ -26,6 +26,7 @@
     "typescript": "^4.7.3"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1048.0",
     "@podman/libpod": "^0.0.1",
     "axios": "^0.27.2",
     "body-parser": "^1.20.0",

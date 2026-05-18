@@ -1,28 +1,33 @@
 export const GAMES = {
-  minecraft: {
-    fabric: {
-      name: "fabric-mc",
-      image: "fabric-mc",
-      versions: ["0.1.0"] as string[],
-    },
-    paper: {
-      name: "paper-mc",
-      image: "paper-mc",
-      versions: [] as string[],
-    },
+  "satisfactory/base": {
+    name: "satisfactory",
+    image: "satisfactory",
+    versions: ["0.1.0"] as string[],
+    port_config: [
+      { host_port: 7777, container_port: 7777, protocol: "tcp" },
+      { host_port: 7777, container_port: 7777, protocol: "udp" },
+      { host_port: 8888, container_port: 8888, protocol: "tcp" },
+    ],
+  },
+  "minecraft/fabric": {
+    name: "fabric-mc",
+    image: "fabric-mc",
+    versions: ["0.1.0"] as string[],
+    port_config: [
+      { host_port: 25565, container_port: 25565, protocol: "tcp" },
+      { host_port: 25565, container_port: 25565, protocol: "udp" },
+      { host_port: 8080, container_port: 8080, protocol: "tcp" },
+    ],
   },
 };
 
-type GameKey = keyof typeof GAMES;
-type ServerEntry = (typeof GAMES)[GameKey][keyof (typeof GAMES)[GameKey]];
+type ServerEntry = (typeof GAMES)[keyof typeof GAMES];
 
 export function getServer(
   game: string,
   server: string,
 ): ServerEntry | undefined {
-  const g = GAMES[game as GameKey];
-  if (!g) return undefined;
-  return g[server as keyof typeof g] as ServerEntry | undefined;
+  return GAMES[`${game}/${server}` as keyof typeof GAMES];
 }
 
 export function isValid(
