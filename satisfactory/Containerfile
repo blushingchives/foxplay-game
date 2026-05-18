@@ -1,5 +1,6 @@
 FROM docker.io/steamcmd/steamcmd:latest AS downloader
 
+RUN steamcmd +login anonymous +quit
 RUN steamcmd \
     +force_install_dir /opt/satisfactory \
     +login anonymous \
