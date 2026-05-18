@@ -28,8 +28,4 @@ RUN echo "eula=TRUE" > eula.txt
 
 WORKDIR /
 # Start script
-CMD ["bash", "./start.sh"]
-
-# Container setup
-EXPOSE 25565
-VOLUME /fabricmc
+ENTRYPOINT ["./start.sh"]

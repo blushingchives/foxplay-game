@@ -20,7 +20,4 @@ USER steam
 
 CMD ["/home/steam/SatisfactoryDedicatedServer/FactoryServer.sh"]
 
-EXPOSE 7777/tcp
-EXPOSE 7777/udp
-EXPOSE 8888/tcp
 VOLUME /home/steam/.config/Epic/FactoryGame/Saved
