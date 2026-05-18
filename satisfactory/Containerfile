@@ -1,4 +1,4 @@
-FROM steamcmd/steamcmd:latest AS downloader
+FROM docker.io/steamcmd/steamcmd:latest AS downloader
 
 RUN steamcmd \
     +force_install_dir /opt/satisfactory \
