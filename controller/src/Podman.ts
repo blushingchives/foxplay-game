@@ -1,4 +1,5 @@
 import { Podman } from "@podman/libpod";
+import http from "http";
 
 const PODMAN_SOCKET = process.env.PODMAN_SOCKET ?? "/run/podman/podman.sock";
 

@@ -4,9 +4,9 @@ export const GAMES = {
     image: "satisfactory",
     versions: ["0.1.0"] as string[],
     port_config: [
-      { host_port: 7777, container_port: 7777, protocol: "tcp" },
-      { host_port: 7777, container_port: 7777, protocol: "udp" },
-      { host_port: 8888, container_port: 8888, protocol: "tcp" },
+      { host_port: 0, container_port: 7777, protocol: "tcp" },
+      { host_port: 0, container_port: 7777, protocol: "udp" },
+      { host_port: 0, container_port: 8888, protocol: "tcp" },
     ],
   },
   "minecraft/fabric": {
@@ -14,9 +14,9 @@ export const GAMES = {
     image: "fabric-mc",
     versions: ["0.1.0"] as string[],
     port_config: [
-      { host_port: 25565, container_port: 25565, protocol: "tcp" },
-      { host_port: 25565, container_port: 25565, protocol: "udp" },
-      { host_port: 8080, container_port: 8080, protocol: "tcp" },
+      { host_port: 0, container_port: 25565, protocol: "tcp" },
+      { host_port: 0, container_port: 25565, protocol: "udp" },
+      { host_port: 0, container_port: 8080, protocol: "tcp" },
     ],
   },
 };

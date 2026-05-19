@@ -43,12 +43,12 @@ const init = async () => {
   const pruneLoop = async () => {
     logger.info(`Prune job initiated`);
     while (true) {
+      await new Promise((res) => setTimeout(res, 15 * 60 * 1000));
       try {
         await prune();
       } catch (err) {
         logger.error(err);
       }
-      await new Promise((res) => setTimeout(res, 15 * 60 * 1000));
     }
   };
 
@@ -74,10 +74,12 @@ app.get("/:game/:server/:version/create", async (req, res) => {
   if (!isValid(GAME, SERVER, VERSION)) {
     return res.status(400).json({ error: "Invalid Params" });
   }
+
   const config = getServer(GAME, SERVER)!;
   const name = `${config.name}-${VERSION}-${generateRandomString(12)}`;
   const hostPath = `/foxplay-games/${name}`;
   await fs.promises.mkdir(hostPath, { recursive: true });
+
   try {
     const createRes = await podman<ContainerCreateResponse>(
       "POST",
@@ -85,13 +87,7 @@ app.get("/:game/:server/:version/create", async (req, res) => {
       {
         image: `${config.image}:${VERSION}`,
         name: name,
-        portmappings: config.port_config.map((ports) => {
-          return {
-            container_port: ports.container_port,
-            host_port: ports.host_port,
-            protocol: ports.protocol,
-          };
-        }),
+        portmappings: config.port_config,
         mounts: [
           {
             type: "bind",
@@ -108,7 +104,27 @@ app.get("/:game/:server/:version/create", async (req, res) => {
       `/v5.0.0/libpod/containers/${createRes.data.Id}/start`,
     );
 
-    return res.json({ id: createRes.data.Id });
+    const inspectRes = await podman<any>(
+      "GET",
+      `/v5.0.0/libpod/containers/${createRes.data.Id}/json`,
+    );
+
+    for (const [key, value] of Object.entries(
+      inspectRes.data.NetworkSettings.Ports as Record<
+        string,
+        Array<{ HostPort: string }>
+      >,
+    )) {
+      const hostPort = value[0].HostPort;
+      const containerPort = key.split("/")[0];
+      config.port_config.forEach((port) => {
+        if (port.container_port === Number(containerPort)) {
+          return (port.host_port = Number(hostPort));
+        }
+      });
+    }
+    console.log(config.port_config);
+    return res.json({ id: createRes.data.Id, port_config: config.port_config });
   } catch (err: any) {
     const status = err.response?.status;
     if (status === 404) return res.status(404).json({ error: err });
