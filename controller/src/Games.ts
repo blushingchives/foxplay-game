@@ -29,7 +29,7 @@ export function getServer(
   game: string,
   server: string,
 ): ServerEntry | undefined {
-  return GAMES[`${game}/${server}` as keyof typeof GAMES];
+  return structuredClone(GAMES[`${game}/${server}` as keyof typeof GAMES]);
 }
 
 export function isValid(

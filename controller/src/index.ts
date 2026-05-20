@@ -10,6 +10,7 @@ import { getServer, isValid } from "./Games";
 import { generateRandomString } from "./AlphanumericalGenerator";
 import { backup, prune } from "./Backup";
 import { ContainerCreateResponse, podman } from "./Podman";
+import { findAvailablePorts } from "./Ports";
 
 const agent = new https.Agent({ family: 4 }); // forces IPv4
 const logger = LoggerClient();
@@ -76,10 +77,45 @@ app.get("/:game/:server/:version/create", async (req, res) => {
   }
 
   const config = getServer(GAME, SERVER)!;
-  const name = `${config.name}-${VERSION}-${generateRandomString(12)}`;
+  const name =
+    req.query.name == undefined
+      ? `${config.name}-${VERSION}-${generateRandomString(12)}`
+      : (req.query.name as string);
   const hostPath = `/foxplay-games/${name}`;
   await fs.promises.mkdir(hostPath, { recursive: true });
 
+  const uniquePorts = new Set(
+    config.port_config.map((port) => port.container_port),
+  );
+  const availablePorts = await findAvailablePorts(
+    uniquePorts.size,
+    20000,
+    60000,
+  );
+  const portMapping: Map<number, number> = new Map();
+  let index = 0;
+  uniquePorts.forEach((port) => {
+    portMapping.set(port, availablePorts[index]);
+    index++;
+  });
+
+  const env: Record<string, string> = {};
+  if (GAME === "satisfactory") {
+    config.port_config.forEach((portConfig) => {
+      const newPort = portMapping.get(portConfig.container_port)!;
+      if (portConfig.container_port === 7777) {
+        env["Port"] = newPort.toString();
+      } else if (portConfig.container_port === 8888) {
+        env["ReliablePort"] = newPort.toString();
+      }
+      portConfig.host_port = newPort;
+      portConfig.container_port = newPort;
+    });
+  } else {
+    config.port_config.forEach((portConfig) => {
+      portConfig.host_port = portMapping.get(portConfig.container_port)!;
+    });
+  }
   try {
     const createRes = await podman<ContainerCreateResponse>(
       "POST",
@@ -96,6 +132,7 @@ app.get("/:game/:server/:version/create", async (req, res) => {
             options: ["rbind", "rw"],
           } as any,
         ],
+        env: env,
       },
     );
 
@@ -104,26 +141,6 @@ app.get("/:game/:server/:version/create", async (req, res) => {
       `/v5.0.0/libpod/containers/${createRes.data.Id}/start`,
     );
 
-    const inspectRes = await podman<any>(
-      "GET",
-      `/v5.0.0/libpod/containers/${createRes.data.Id}/json`,
-    );
-
-    for (const [key, value] of Object.entries(
-      inspectRes.data.NetworkSettings.Ports as Record<
-        string,
-        Array<{ HostPort: string }>
-      >,
-    )) {
-      const hostPort = value[0].HostPort;
-      const containerPort = key.split("/")[0];
-      config.port_config.forEach((port) => {
-        if (port.container_port === Number(containerPort)) {
-          return (port.host_port = Number(hostPort));
-        }
-      });
-    }
-    console.log(config.port_config);
     return res.json({ id: createRes.data.Id, port_config: config.port_config });
   } catch (err: any) {
     const status = err.response?.status;
