@@ -15,9 +15,9 @@ RUN apt-get update \
     && useradd -m steam
 
 COPY --from=downloader --chown=steam:steam /opt/satisfactory /home/steam/SatisfactoryDedicatedServer
+COPY --chown=steam:steam start.sh /home/steam/start.sh
+RUN chmod +x /home/steam/start.sh
 
 USER steam
 
-CMD ["/home/steam/SatisfactoryDedicatedServer/FactoryServer.sh"]
-
-VOLUME /home/steam/.config/Epic/FactoryGame/Saved
+CMD ["/home/steam/start.sh"]
