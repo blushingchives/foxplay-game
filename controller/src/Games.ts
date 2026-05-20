@@ -2,6 +2,7 @@ export const GAMES = {
   "satisfactory/base": {
     name: "satisfactory",
     image: "satisfactory",
+    backup_path: "/minecraft/world",
     versions: ["0.1.0"] as string[],
     port_config: [
       { host_port: 0, container_port: 7777, protocol: "tcp" },

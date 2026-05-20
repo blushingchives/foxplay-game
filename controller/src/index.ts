@@ -92,7 +92,7 @@ app.get("/:game/:server/:version/create", async (req, res) => {
           {
             type: "bind",
             source: hostPath,
-            destination: `/minecraft/world`,
+            destination: config.backup_path,
             options: ["rbind", "rw"],
           } as any,
         ],
