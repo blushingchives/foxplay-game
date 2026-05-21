@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fafaf7;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #fafaf7;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.sidebar {
+  background-color: #fafaf7;
+  width: 200px;
+  border-right: #efefea 1px solid;
+  font-size: small;
+  font-family: var(--font-jetbrains-mono);
+  color: #1a1a1a;
+  display: flex;
+  justify-content: space-between;
+  flex-direction: column;
+}
+.sidebar img {
+  margin: 30px 0 20px 20px;
+  height: 30px;
+  width: auto;
+}
+.sidebar .newGameButton {
+  background-color: #f26a1f;
+  margin: 10px 15px 30px 15px;
+  padding: 7px 10px 7px 10px;
+  border-radius: 5px;
+  display: flex;
+  justify-content: left;
+  align-items: center;
+  font-weight: bold;
+  color: #ededed;
+}
+.sidebar .newGameButton svg {
+  margin-right: 5px;
+}
+.sidebar .nav {
+  margin: 0 15px 10px 15px;
+  padding: 7px 5px 7px 5px;
+  display: flex;
+  justify-content: left;
+  align-items: center;
+}
+.sidebar .nav.unselected {
+  border: 1px solid rgba(0, 0, 0, 0);
+}
+.sidebar .nav.selected {
+  background-color: #ffffff;
+  border: 1px solid #efefea;
+  border-radius: 5px;
+}
+.sidebar .nav svg {
+  margin-right: 5px;
+}
+.sidebar .profile {
+  display: flex;
+  justify-content: left;
+  align-items: center;
+  font-weight: bold;
+  border-top: 1px solid #efefea;
+  margin: 0 15px 0px 15px;
+  padding: 15px 0 15px 0;
+}
+.sidebar .profile .image {
+  width: 30px;
+  height: 30px;
+  background-color: #f26a1f;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+.sidebar .profile .name {
+  line-height: 1.2;
+}
+.sidebar .profile .plan {
+  font-weight: 300;
+  line-height: 1.2;
+}
