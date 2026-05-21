@@ -1,0 +1,22 @@
+# Production docker-compose for server deployment
+# Usage: docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d && docker image prune -a -f
+
+name: arduino-1
+services:
+  receiver:
+    image: ghcr.io/blushingchives/nlos-server-receiver:latest
+    ports:
+      - 80:5000
+    restart: unless-stopped
+    env_file:
+      - .env
+  periodic:
+    image: ghcr.io/blushingchives/nlos-server-periodic:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+  pulse:
+    image: ghcr.io/blushingchives/nlos-server-pulse:latest
+    restart: unless-stopped
+    env_file:
+      - .env

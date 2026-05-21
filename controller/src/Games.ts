@@ -2,6 +2,7 @@ export const GAMES = {
   "satisfactory/base": {
     name: "satisfactory",
     image: "satisfactory",
+    backup_path: "/minecraft/world",
     versions: ["0.1.0"] as string[],
     port_config: [
       { host_port: 0, container_port: 7777, protocol: "tcp" },
@@ -12,6 +13,7 @@ export const GAMES = {
   "minecraft/fabric": {
     name: "fabric-mc",
     image: "fabricmc",
+    backup_path: "/minecraft/world",
     versions: ["0.1.0"] as string[],
     port_config: [
       { host_port: 0, container_port: 25565, protocol: "tcp" },
@@ -27,7 +29,7 @@ export function getServer(
   game: string,
   server: string,
 ): ServerEntry | undefined {
-  return GAMES[`${game}/${server}` as keyof typeof GAMES];
+  return structuredClone(GAMES[`${game}/${server}` as keyof typeof GAMES]);
 }
 
 export function isValid(

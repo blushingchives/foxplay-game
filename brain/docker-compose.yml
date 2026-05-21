@@ -1,0 +1,38 @@
+# eval `ssh-agent -s` && ssh-add ~/keypair.pem
+# docker compose up -d --build --force-recreate
+# eval `ssh-agent -s` && ssh-add ~/keypair.pem && git pull && docker compose up -d --build --force-recreate
+
+name: arduino-1
+services:
+  receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TARGET: src/receiver.ts
+        RUN_TARGET: dist/receiver.js
+    ports:
+      - 80:5000
+    restart: unless-stopped
+    env_file:
+      - .env
+  periodic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TARGET: src/periodic.ts
+        RUN_TARGET: dist/periodic.js
+    restart: unless-stopped
+    env_file:
+      - .env
+  pulse:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TARGET: src/pulse.ts
+        RUN_TARGET: dist/pulse.js
+    restart: unless-stopped
+    env_file:
+      - .env

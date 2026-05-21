@@ -1,9 +1,9 @@
 #!/bin/bash
 
-cd minecraft
-mv ../server.properties .
-mv ../RconMonitor.class .
+: ${Port:?Port is required}
+: ${ReliablePort:?ReliablePort is required}
 
-java -cp . RconMonitor &
-
-java -server -XX:+UseContainerSupport -XX:MaxRAMPercentage=90 -jar fabric-server-mc.jar nogui
+exec /home/steam/SatisfactoryDedicatedServer/FactoryServer.sh \
+    -Port=$Port \
+    -ReliablePort=$ReliablePort \
+    -ExternalReliablePort=$ReliablePort
