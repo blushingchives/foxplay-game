@@ -14,9 +14,9 @@ const app = express();
 app.use(bodyParser.json());
 
 const ovh = new OvhEngine({
-  appKey: "0135d6f397bdbfc7",
-  appSecret: "1dea6a8164efb1fc0fa9146078685c01",
-  consumerKey: "28e6369de8319af50e4ce6be41237909",
+  appKey: process.env.OVH_APPLICATION_KEY!,
+  appSecret: process.env.OVH_APPLICATION_SECRET!,
+  consumerKey: process.env.OVH_CONSUMER_KEY!,
   endpoint: "ovh-ca",
 });
 
