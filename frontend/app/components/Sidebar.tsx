@@ -1,10 +1,22 @@
+"use client";
 import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 export default function Sidebar() {
+  const pathname = usePathname();
   return (
     <nav className="sidebar">
       <div>
-        <Image src="/foxplay-logo.svg" alt="Foxplay" width={100} height={100} />
-        <div className="newGameButton">
+        <Link href="/">
+          <Image
+            src="/foxplay-logo.svg"
+            alt="Foxplay"
+            width={100}
+            height={100}
+            loading="eager"
+          />
+        </Link>
+        <Link href="/servers/create" className="newGameButton">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -21,8 +33,11 @@ export default function Sidebar() {
             <path d="M12 5v14" />
           </svg>
           <span>New server</span>
-        </div>
-        <div className="nav selected">
+        </Link>
+        <Link
+          href="/servers"
+          className={`nav${pathname === "/servers" ? " selected" : ""}`}
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -41,8 +56,11 @@ export default function Sidebar() {
             <line x1="6" x2="6.01" y1="18" y2="18" />
           </svg>
           <span>Servers</span>
-        </div>
-        <div className="nav">
+        </Link>
+        <Link
+          href="/friends"
+          className={`nav${pathname === "/friends" ? " selected" : ""}`}
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -61,8 +79,9 @@ export default function Sidebar() {
             <circle cx="9" cy="7" r="4" />
           </svg>
           <span>Friends</span>
-        </div>
+        </Link>
       </div>
+
       <div>
         <div className="profile">
           <div className="image"></div>
