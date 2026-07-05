@@ -87,18 +87,31 @@ func (m *PoolManager) Invoke(functionName string, event InvocationEvent) (*Invoc
 
 	resp, err := invokeViaVsock(vm.vsockPath, event)
 
-	// Return VM to warm pool regardless of invocation result
+	if err != nil {
+		// vsock-level error means the VM or bootstrap is dead — discard it
+		log.Printf("[%s] VM %s unhealthy (vsock error), killing", functionName, vm.id)
+		killVM(vm)
+		return nil, err
+	}
+
+	if resp.Status >= 500 {
+		// 5xx from bootstrap likely means the user's app crashed — discard VM
+		log.Printf("[%s] VM %s returned status %d, killing", functionName, vm.id, resp.Status)
+		killVM(vm)
+		return resp, nil
+	}
+
+	// Healthy — return to warm pool
 	vm.state = StateWarm
 	select {
 	case pool.warm <- vm:
 		log.Printf("[%s] VM %s returned to warm pool", functionName, vm.id)
 	default:
-		// Pool is full — kill this VM
 		log.Printf("[%s] warm pool full, discarding VM %s", functionName, vm.id)
 		killVM(vm)
 	}
 
-	return resp, err
+	return resp, nil
 }
 
 func (m *PoolManager) bootVM(functionName string) (*VM, error) {

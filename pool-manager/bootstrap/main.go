@@ -93,6 +93,14 @@ func main() {
 	}
 	log.Printf("listening for invocations on vsock port %d", vsockPort)
 
+	// Monitor app — if it dies, close the vsock listener so the accept loop exits
+	// and the pool manager gets an error instead of a dead VM being reused.
+	go func() {
+		app.Wait()
+		log.Printf("app process died — closing vsock listener")
+		syscall.Close(fd)
+	}()
+
 	for {
 		connFd, _, errno := syscall.Syscall(syscall.SYS_ACCEPT, uintptr(fd), 0, 0)
 		if errno != 0 {
