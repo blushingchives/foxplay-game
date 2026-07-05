@@ -191,13 +191,32 @@ func listenVsock(port uint32) (int, error) {
 	return int(fd), nil
 }
 
-// fdToConn wraps a raw file descriptor as a net.Conn via os.File.
+// fdToConn wraps a raw fd as a net.Conn using direct syscalls.
+// net.FileConn does not support AF_VSOCK so we bypass it entirely.
 func fdToConn(fd int) net.Conn {
-	f := os.NewFile(uintptr(fd), "vsock-conn")
-	conn, _ := net.FileConn(f)
-	f.Close() // FileConn duplicates the fd, safe to close the file
-	return conn
+	return &rawConn{fd: fd}
 }
+
+type rawConn struct{ fd int }
+
+func (c *rawConn) Read(b []byte) (int, error) {
+	n, err := syscall.Read(c.fd, b)
+	if n == 0 && err == nil {
+		return 0, io.EOF
+	}
+	return n, err
+}
+
+func (c *rawConn) Write(b []byte) (int, error) {
+	return syscall.Write(c.fd, b)
+}
+
+func (c *rawConn) Close() error                       { return syscall.Close(c.fd) }
+func (c *rawConn) LocalAddr() net.Addr                { return &net.UnixAddr{} }
+func (c *rawConn) RemoteAddr() net.Addr               { return &net.UnixAddr{} }
+func (c *rawConn) SetDeadline(t time.Time) error      { return nil }
+func (c *rawConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c *rawConn) SetWriteDeadline(t time.Time) error { return nil }
 
 func waitForApp(port int, timeout time.Duration) error {
 	url := fmt.Sprintf("http://127.0.0.1:%d/", port)
