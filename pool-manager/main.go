@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -22,11 +23,12 @@ func cleanupStaleVMs() {
 func main() {
 	cleanupStaleVMs()
 	mgr := NewPoolManager(Config{
-		KernelPath:   getEnv("KERNEL_PATH", "/tmp/fc/vmlinux.bin"),
-		BaseRootfs:   getEnv("BASE_ROOTFS", "/tmp/node22.ext4"),
-		FunctionsDir: getEnv("FUNCTIONS_DIR", "/tmp/functions"),
+		KernelPath:     getEnv("KERNEL_PATH", "/tmp/fc/vmlinux.bin"),
+		BaseRootfs:     getEnv("BASE_ROOTFS", "/tmp/node22.ext4"),
+		FunctionsDir:   getEnv("FUNCTIONS_DIR", "/tmp/functions"),
 		FirecrackerBin: getEnv("FIRECRACKER_BIN", "firecracker"),
-		WarmPoolSize: 1,
+		WarmPoolSize:   1,
+		MaxVMs:         getEnvInt("MAX_VMS", 1),
 	})
 
 	http.HandleFunc("/invoke/", func(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +73,15 @@ func main() {
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return fallback
 }
