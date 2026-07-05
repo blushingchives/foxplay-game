@@ -21,6 +21,7 @@ func spawnFirecracker(bin, socketPath string) (int, error) {
 	if err := cmd.Start(); err != nil {
 		return 0, fmt.Errorf("exec firecracker: %w", err)
 	}
+	go cmd.Wait() // reap the process when it exits so it doesn't become a zombie
 
 	// Wait for the API socket to appear
 	deadline := time.Now().Add(5 * time.Second)
