@@ -194,7 +194,7 @@ func fdToConn(fd int) net.Conn {
 }
 
 func waitForApp(port int, timeout time.Duration) error {
-	url := fmt.Sprintf("http://localhost:%d/", port)
+	url := fmt.Sprintf("http://127.0.0.1:%d/", port)
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		resp, err := http.Get(url)
@@ -214,23 +214,44 @@ func bringUpLoopback() error {
 	}
 	defer syscall.Close(fd)
 
-	ifreq := struct {
+	const (
+		SIOCGIFFLAGS = 0x8913
+		SIOCSIFFLAGS = 0x8914
+		SIOCSIFADDR  = 0x8916
+	)
+
+	type ifreqFlags struct {
 		Name  [syscall.IFNAMSIZ]byte
 		Flags uint16
 		_     [22]byte
-	}{}
-	copy(ifreq.Name[:], "lo")
+	}
+	type ifreqAddr struct {
+		Name [syscall.IFNAMSIZ]byte
+		Addr syscall.RawSockaddrInet4
+		_    [8]byte
+	}
 
-	const SIOCGIFFLAGS = 0x8913
-	const SIOCSIFFLAGS = 0x8914
-
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), SIOCGIFFLAGS, uintptr(unsafe.Pointer(&ifreq))); errno != 0 {
+	// Bring up the interface
+	flags := ifreqFlags{}
+	copy(flags.Name[:], "lo")
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), SIOCGIFFLAGS, uintptr(unsafe.Pointer(&flags))); errno != 0 {
 		return fmt.Errorf("SIOCGIFFLAGS: %w", errno)
 	}
-	ifreq.Flags |= syscall.IFF_UP | syscall.IFF_RUNNING
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), SIOCSIFFLAGS, uintptr(unsafe.Pointer(&ifreq))); errno != 0 {
+	flags.Flags |= syscall.IFF_UP | syscall.IFF_RUNNING
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), SIOCSIFFLAGS, uintptr(unsafe.Pointer(&flags))); errno != 0 {
 		return fmt.Errorf("SIOCSIFFLAGS: %w", errno)
 	}
+
+	// Assign 127.0.0.1 to lo
+	addr := ifreqAddr{}
+	copy(addr.Name[:], "lo")
+	addr.Addr.Family = syscall.AF_INET
+	addr.Addr.Addr = [4]byte{127, 0, 0, 1}
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), SIOCSIFADDR, uintptr(unsafe.Pointer(&addr))); errno != 0 {
+		return fmt.Errorf("SIOCSIFADDR: %w", errno)
+	}
+
+	log.Println("loopback configured (127.0.0.1)")
 	return nil
 }
 
