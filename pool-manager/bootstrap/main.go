@@ -89,9 +89,9 @@ func main() {
 	log.Printf("listening for invocations on vsock port %d", vsockPort)
 
 	for {
-		connFd, _, errno := syscall.Accept(fd)
-		if errno != 0 {
-			log.Printf("accept: %v", errno)
+		connFd, _, err := syscall.Accept(fd)
+		if err != nil {
+			log.Printf("accept: %v", err)
 			continue
 		}
 		go handleInvocation(connFd)
