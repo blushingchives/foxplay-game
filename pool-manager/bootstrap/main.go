@@ -99,6 +99,7 @@ func main() {
 			log.Printf("accept: %v", errno)
 			continue
 		}
+		log.Printf("accepted connection fd=%d", connFd)
 		go handleInvocation(int(connFd))
 	}
 }
@@ -107,11 +108,13 @@ func handleInvocation(fd int) {
 	conn := fdToConn(fd)
 	defer conn.Close()
 
+	log.Printf("handleInvocation: reading event")
 	var event InvocationEvent
 	if err := json.NewDecoder(conn).Decode(&event); err != nil {
 		log.Printf("decode event: %v", err)
 		return
 	}
+	log.Printf("handleInvocation: %s %s", event.Method, event.Path)
 
 	url := fmt.Sprintf("http://localhost:%d%s", appPort, event.Path)
 	if event.Query != "" {
@@ -134,14 +137,17 @@ func handleInvocation(fd int) {
 		}
 	}
 
+	log.Printf("handleInvocation: sending to Express")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		log.Printf("express error: %v", err)
 		sendError(conn, 502, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+	log.Printf("handleInvocation: got response %d, sending back", resp.StatusCode)
 
 	json.NewEncoder(conn).Encode(InvocationResponse{
 		Status:  resp.StatusCode,
