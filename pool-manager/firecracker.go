@@ -15,9 +15,8 @@ import (
 
 func spawnFirecracker(bin, socketPath string) (int, error) {
 	cmd := exec.Command(bin, "--api-sock", socketPath)
-	// Discard VM output — change to os.Stdout/Stderr for debugging
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
 		return 0, fmt.Errorf("exec firecracker: %w", err)
