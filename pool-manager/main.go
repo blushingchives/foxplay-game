@@ -5,10 +5,22 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
+func cleanupStaleVMs() {
+	exec.Command("pkill", "-f", "firecracker --api-sock").Run()
+	matches, _ := filepath.Glob("/tmp/fc-*")
+	for _, f := range matches {
+		os.Remove(f)
+	}
+	log.Printf("cleaned up %d stale VM files", len(matches))
+}
+
 func main() {
+	cleanupStaleVMs()
 	mgr := NewPoolManager(Config{
 		KernelPath:   getEnv("KERNEL_PATH", "/tmp/fc/vmlinux.bin"),
 		BaseRootfs:   getEnv("BASE_ROOTFS", "/tmp/node22.ext4"),
