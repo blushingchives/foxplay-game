@@ -116,7 +116,7 @@ func handleInvocation(fd int) {
 	}
 	log.Printf("handleInvocation: %s %s", event.Method, event.Path)
 
-	url := fmt.Sprintf("http://localhost:%d%s", appPort, event.Path)
+	url := fmt.Sprintf("http://127.0.0.1:%d%s", appPort, event.Path)
 	if event.Query != "" {
 		url += "?" + event.Query
 	}
