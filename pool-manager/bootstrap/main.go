@@ -68,8 +68,11 @@ func main() {
 	log.Println("code drive mounted at /var/task")
 
 	// 4. Start user's app
-	app := exec.Command("node", "/var/task/index.js")
-	app.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", appPort))
+	app := exec.Command("/usr/local/bin/node", "/var/task/index.js")
+	app.Env = append(os.Environ(),
+		fmt.Sprintf("PORT=%d", appPort),
+		"PATH=/usr/local/bin:/usr/bin:/bin",
+	)
 	app.Stdout = os.Stdout
 	app.Stderr = os.Stderr
 	if err := app.Start(); err != nil {
