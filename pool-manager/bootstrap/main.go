@@ -56,11 +56,13 @@ func main() {
 	mustMount("tmpfs", "/tmp", "tmpfs")
 
 	// 2. Loopback up (required for localhost)
-	run("ip", "link", "set", "lo", "up")
+	if err := bringUpLoopback(); err != nil {
+		log.Printf("loopback: %v (continuing)", err)
+	}
 
 	// 3. Mount code drive (/dev/vdb) at /var/task
 	os.MkdirAll("/var/task", 0755)
-	if err := syscall.Mount("/dev/vdb", "/var/task", "ext4", syscall.MS_RDONLY, ""); err != nil {
+	if err := syscall.Mount("/dev/vdb", "/var/task", "ext4", syscall.MS_RDONLY, "noload"); err != nil {
 		log.Fatalf("mount code drive: %v", err)
 	}
 	log.Println("code drive mounted at /var/task")
@@ -202,14 +204,36 @@ func waitForApp(port int, timeout time.Duration) error {
 	return fmt.Errorf("app did not respond within %s", timeout)
 }
 
+func bringUpLoopback() error {
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_IP)
+	if err != nil {
+		return fmt.Errorf("socket: %w", err)
+	}
+	defer syscall.Close(fd)
+
+	ifreq := struct {
+		Name  [syscall.IFNAMSIZ]byte
+		Flags uint16
+		_     [22]byte
+	}{}
+	copy(ifreq.Name[:], "lo")
+
+	const SIOCGIFFLAGS = 0x8913
+	const SIOCSIFFLAGS = 0x8914
+
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), SIOCGIFFLAGS, uintptr(unsafe.Pointer(&ifreq))); errno != 0 {
+		return fmt.Errorf("SIOCGIFFLAGS: %w", errno)
+	}
+	ifreq.Flags |= syscall.IFF_UP | syscall.IFF_RUNNING
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), SIOCSIFFLAGS, uintptr(unsafe.Pointer(&ifreq))); errno != 0 {
+		return fmt.Errorf("SIOCSIFFLAGS: %w", errno)
+	}
+	return nil
+}
+
 func mustMount(source, target, fstype string) {
 	if err := syscall.Mount(source, target, fstype, 0, ""); err != nil {
 		log.Printf("mount %s → %s: %v (continuing)", source, target, err)
 	}
 }
 
-func run(name string, args ...string) {
-	if out, err := exec.Command(name, args...).CombinedOutput(); err != nil {
-		log.Printf("run %s: %v: %s (continuing)", name, err, out)
-	}
-}
