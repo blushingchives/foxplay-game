@@ -32,6 +32,7 @@ type VM struct {
 	vsockPath  string // vsock UDS path
 	state      VMState
 	function   string
+	lastUsed   time.Time
 }
 
 type Pool struct {
@@ -44,10 +45,55 @@ type PoolManager struct {
 	config Config
 }
 
+const idleTimeout = 120 * time.Second
+
 func NewPoolManager(cfg Config) *PoolManager {
-	return &PoolManager{
+	m := &PoolManager{
 		pools:  make(map[string]*Pool),
 		config: cfg,
+	}
+	go m.idleSweeper()
+	return m
+}
+
+// idleSweeper runs every 30 seconds and kills warm VMs idle for over idleTimeout.
+func (m *PoolManager) idleSweeper() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		m.mu.Lock()
+		pools := make(map[string]*Pool, len(m.pools))
+		for k, v := range m.pools {
+			pools[k] = v
+		}
+		m.mu.Unlock()
+
+		now := time.Now()
+		for functionName, pool := range pools {
+			// Drain the warm channel, kill idle VMs, put live ones back.
+			var live []*VM
+			for {
+				select {
+				case vm := <-pool.warm:
+					if now.Sub(vm.lastUsed) > idleTimeout {
+						log.Printf("[%s] VM %s idle for %s, killing", functionName, vm.id, now.Sub(vm.lastUsed).Round(time.Second))
+						killVM(vm)
+					} else {
+						live = append(live, vm)
+					}
+				default:
+					goto done
+				}
+			}
+		done:
+			for _, vm := range live {
+				select {
+				case pool.warm <- vm:
+				default:
+					killVM(vm)
+				}
+			}
+		}
 	}
 }
 
@@ -103,6 +149,7 @@ func (m *PoolManager) Invoke(functionName string, event InvocationEvent) (*Invoc
 
 	// Healthy — return to warm pool
 	vm.state = StateWarm
+	vm.lastUsed = time.Now()
 	select {
 	case pool.warm <- vm:
 		log.Printf("[%s] VM %s returned to warm pool", functionName, vm.id)
@@ -149,6 +196,7 @@ func (m *PoolManager) bootVM(functionName string) (*VM, error) {
 	}
 
 	vm.state = StateWarm
+	vm.lastUsed = time.Now()
 	log.Printf("[%s] VM %s ready", functionName, id)
 	return vm, nil
 }
