@@ -108,8 +108,9 @@ func extractTar(r io.Reader, destDir string) error {
 		}
 
 		// Prevent path traversal attacks
+		clean := filepath.Clean(destDir)
 		target := filepath.Join(destDir, filepath.Clean("/"+hdr.Name))
-		if !strings.HasPrefix(target, filepath.Clean(destDir)+string(os.PathSeparator)) {
+		if target != clean && !strings.HasPrefix(target, clean+string(os.PathSeparator)) {
 			return fmt.Errorf("illegal path in tarball: %s", hdr.Name)
 		}
 
