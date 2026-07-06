@@ -18,20 +18,22 @@ func main() {
 	http.HandleFunc("/deploy/", store.handleDeploy)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		entries, _ := os.ReadDir(store.functionsDir)
-		var count int
 		var totalBytes int64
+		functions := map[string]int64{}
 		for _, e := range entries {
 			if strings.HasSuffix(e.Name(), ".ext4") {
 				if info, err := e.Info(); err == nil {
-					count++
+					name := strings.TrimSuffix(e.Name(), ".ext4")
+					functions[name] = info.Size()
 					totalBytes += info.Size()
 				}
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"artifacts":   count,
+			"artifacts":   len(functions),
 			"total_bytes": totalBytes,
+			"functions":   functions,
 		})
 	})
 
