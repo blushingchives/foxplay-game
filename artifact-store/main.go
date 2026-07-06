@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -15,7 +17,22 @@ func main() {
 
 	http.HandleFunc("/deploy/", store.handleDeploy)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		entries, _ := os.ReadDir(store.functionsDir)
+		var count int
+		var totalBytes int64
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".ext4") {
+				if info, err := e.Info(); err == nil {
+					count++
+					totalBytes += info.Size()
+				}
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"artifacts":   count,
+			"total_bytes": totalBytes,
+		})
 	})
 
 	addr := getEnv("LISTEN_ADDR", ":9090")

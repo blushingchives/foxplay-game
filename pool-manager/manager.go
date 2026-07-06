@@ -334,6 +334,38 @@ func (m *PoolManager) idleSweeper() {
 	}
 }
 
+type PoolStats struct {
+	VMs    int `json:"vms"`
+	Queued int `json:"queued"`
+}
+
+type ManagerStats struct {
+	VMs   int                    `json:"vms"`
+	Queued int                   `json:"queued"`
+	Pools  map[string]PoolStats  `json:"pools"`
+}
+
+func (m *PoolManager) Stats() ManagerStats {
+	m.mu.Lock()
+	pools := make(map[string]*Pool, len(m.pools))
+	for k, v := range m.pools {
+		pools[k] = v
+	}
+	m.mu.Unlock()
+
+	stats := ManagerStats{Pools: make(map[string]PoolStats)}
+	for name, pool := range pools {
+		pool.mu.Lock()
+		booted := pool.booted
+		pool.mu.Unlock()
+		queued := len(pool.waiting)
+		stats.VMs += booted
+		stats.Queued += queued
+		stats.Pools[name] = PoolStats{VMs: booted, Queued: queued}
+	}
+	return stats
+}
+
 func newID() string {
 	b := make([]byte, 6)
 	rand.Read(b)

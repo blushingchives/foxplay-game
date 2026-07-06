@@ -77,7 +77,8 @@ func main() {
 	})
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mgr.Stats())
 	})
 
 	addr := getEnv("LISTEN_ADDR", ":8080")
