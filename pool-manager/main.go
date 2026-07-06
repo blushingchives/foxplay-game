@@ -49,7 +49,7 @@ func main() {
 			return
 		}
 
-		resp, err := mgr.Invoke(functionName, event)
+		resp, err := mgr.Invoke(r.Context(), functionName, event)
 		if err != nil {
 			log.Printf("[%s] invocation error: %v", functionName, err)
 			http.Error(w, "invocation failed", http.StatusInternalServerError)

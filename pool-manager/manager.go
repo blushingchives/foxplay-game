@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"log"
@@ -36,11 +37,32 @@ type VM struct {
 	lastUsed   time.Time
 }
 
+type waiter struct {
+	ch  chan *VM
+	ctx context.Context
+}
+
 type Pool struct {
 	warm    chan *VM
-	waiting chan chan *VM // queued requests waiting for a VM
+	waiting []*waiter
 	mu      sync.Mutex
 	booted  int // total VMs alive (warm + busy)
+}
+
+// popWaiter returns the first waiter whose client hasn't disconnected,
+// discarding any cancelled ones. Must be called with pool.mu held.
+func (pool *Pool) popWaiter() *waiter {
+	for len(pool.waiting) > 0 {
+		w := pool.waiting[0]
+		pool.waiting = pool.waiting[1:]
+		select {
+		case <-w.ctx.Done():
+			// client disconnected, skip
+		default:
+			return w
+		}
+	}
+	return nil
 }
 
 type PoolManager struct {
@@ -67,14 +89,13 @@ func (m *PoolManager) getPool(functionName string) *Pool {
 		return pool
 	}
 	pool := &Pool{
-		warm:    make(chan *VM, m.config.WarmPoolSize),
-		waiting: make(chan chan *VM, 1000),
+		warm: make(chan *VM, m.config.WarmPoolSize),
 	}
 	m.pools[functionName] = pool
 	return pool
 }
 
-func (m *PoolManager) Invoke(functionName string, event InvocationEvent) (*InvocationResponse, error) {
+func (m *PoolManager) Invoke(ctx context.Context, functionName string, event InvocationEvent) (*InvocationResponse, error) {
 	pool := m.getPool(functionName)
 	maxVMs := m.config.MaxVMs
 
@@ -110,20 +131,20 @@ func (m *PoolManager) Invoke(functionName string, event InvocationEvent) (*Invoc
 				}
 			} else {
 				// At max capacity — queue this request
-				waiter := make(chan *VM, 1)
-				select {
-				case pool.waiting <- waiter:
-				default:
-					pool.mu.Unlock()
-					return nil, fmt.Errorf("[%s] request queue full", functionName)
-				}
+				w := &waiter{ch: make(chan *VM, 1), ctx: ctx}
+				pool.waiting = append(pool.waiting, w)
 				pool.mu.Unlock()
 				log.Printf("[%s] at max VMs (%d), request queued", functionName, maxVMs)
-				vm = <-waiter
-				if vm == nil {
-					return nil, fmt.Errorf("[%s] queued request failed: VM boot error", functionName)
+
+				select {
+				case vm = <-w.ch:
+					if vm == nil {
+						return nil, fmt.Errorf("[%s] queued request failed: VM boot error", functionName)
+					}
+					log.Printf("[%s] dequeued, got VM %s", functionName, vm.id)
+				case <-ctx.Done():
+					return nil, fmt.Errorf("[%s] request cancelled by client", functionName)
 				}
-				log.Printf("[%s] dequeued, got VM %s", functionName, vm.id)
 			}
 		}
 	}
@@ -152,21 +173,25 @@ func (m *PoolManager) Invoke(functionName string, event InvocationEvent) (*Invoc
 
 // returnVM gives a healthy VM to the next queued request, or puts it in the warm pool.
 func (m *PoolManager) returnVM(pool *Pool, functionName string, vm *VM) {
-	select {
-	case waiter := <-pool.waiting:
+	pool.mu.Lock()
+	w := pool.popWaiter()
+	pool.mu.Unlock()
+
+	if w != nil {
 		log.Printf("[%s] handing VM %s to queued request", functionName, vm.id)
-		waiter <- vm
+		w.ch <- vm
+		return
+	}
+
+	select {
+	case pool.warm <- vm:
+		log.Printf("[%s] VM %s returned to warm pool", functionName, vm.id)
 	default:
-		select {
-		case pool.warm <- vm:
-			log.Printf("[%s] VM %s returned to warm pool", functionName, vm.id)
-		default:
-			log.Printf("[%s] warm pool full, discarding VM %s", functionName, vm.id)
-			killVM(vm)
-			pool.mu.Lock()
-			pool.booted--
-			pool.mu.Unlock()
-		}
+		log.Printf("[%s] warm pool full, discarding VM %s", functionName, vm.id)
+		killVM(vm)
+		pool.mu.Lock()
+		pool.booted--
+		pool.mu.Unlock()
 	}
 }
 
@@ -179,17 +204,16 @@ func (m *PoolManager) discardVM(pool *Pool, functionName string, vm *VM) {
 	pool.booted--
 	maxVMs := m.config.MaxVMs
 
-	var waiter chan *VM
+	var w *waiter
 	if maxVMs <= 0 || pool.booted < maxVMs {
-		select {
-		case waiter = <-pool.waiting:
+		w = pool.popWaiter()
+		if w != nil {
 			pool.booted++ // reserve the slot for the replacement
-		default:
 		}
 	}
 	pool.mu.Unlock()
 
-	if waiter == nil {
+	if w == nil {
 		return
 	}
 
@@ -197,26 +221,27 @@ func (m *PoolManager) discardVM(pool *Pool, functionName string, vm *VM) {
 		newVM, err := m.bootVM(functionName)
 		if err != nil {
 			log.Printf("[%s] replacement VM boot failed: %v", functionName, err)
-			close(waiter) // sends nil; Invoke treats nil as failure
+			close(w.ch) // sends nil; Invoke treats nil as failure
 			pool.mu.Lock()
 			pool.booted--
 			pool.mu.Unlock()
+			m.failWaiters(pool)
 			return
 		}
-		waiter <- newVM
+		w.ch <- newVM
 	}()
 }
 
 // failWaiters drains the waiting queue and closes each channel, causing
 // blocked callers to receive nil and return an error.
 func (m *PoolManager) failWaiters(pool *Pool) {
-	for {
-		select {
-		case waiter := <-pool.waiting:
-			close(waiter)
-		default:
-			return
-		}
+	pool.mu.Lock()
+	waiters := pool.waiting
+	pool.waiting = nil
+	pool.mu.Unlock()
+
+	for _, w := range waiters {
+		close(w.ch)
 	}
 }
 
