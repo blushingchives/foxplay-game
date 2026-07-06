@@ -105,6 +105,7 @@ func (m *PoolManager) Invoke(functionName string, event InvocationEvent) (*Invoc
 					pool.mu.Lock()
 					pool.booted--
 					pool.mu.Unlock()
+					m.failWaiters(pool)
 					return nil, fmt.Errorf("boot VM: %w", err)
 				}
 			} else {
@@ -204,6 +205,19 @@ func (m *PoolManager) discardVM(pool *Pool, functionName string, vm *VM) {
 		}
 		waiter <- newVM
 	}()
+}
+
+// failWaiters drains the waiting queue and closes each channel, causing
+// blocked callers to receive nil and return an error.
+func (m *PoolManager) failWaiters(pool *Pool) {
+	for {
+		select {
+		case waiter := <-pool.waiting:
+			close(waiter)
+		default:
+			return
+		}
+	}
 }
 
 func (m *PoolManager) bootVM(functionName string) (*VM, error) {
