@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -49,7 +50,21 @@ func main() {
 			return
 		}
 
-		resp, err := mgr.Invoke(r.Context(), functionName, event)
+		// r.Context() is not cancelled on HTTP/1.1 client disconnect while the
+		// handler is blocked. CloseNotifier actively watches the connection.
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		if cn, ok := w.(http.CloseNotifier); ok {
+			go func() {
+				select {
+				case <-cn.CloseNotify():
+					cancel()
+				case <-ctx.Done():
+				}
+			}()
+		}
+
+		resp, err := mgr.Invoke(ctx, functionName, event)
 		if err != nil {
 			log.Printf("[%s] invocation error: %v", functionName, err)
 			http.Error(w, "invocation failed", http.StatusInternalServerError)
