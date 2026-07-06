@@ -15,7 +15,6 @@ import (
 
 type ArtifactStore struct {
 	functionsDir string
-	imageSizeMB  int
 }
 
 func (s *ArtifactStore) handleDeploy(w http.ResponseWriter, r *http.Request) {
@@ -73,8 +72,14 @@ func (s *ArtifactStore) buildAndStore(functionName string, tarball io.Reader) er
 		return fmt.Errorf("extract tarball: %w", err)
 	}
 
+	sizeMB, err := measuredSizeMB(srcDir)
+	if err != nil {
+		return fmt.Errorf("measure size: %w", err)
+	}
+	log.Printf("[%s] content size %d MB (with overhead)", functionName, sizeMB)
+
 	imgPath := filepath.Join(tmpDir, functionName+".ext4")
-	cmd := exec.Command("mkfs.ext4", "-d", srcDir, imgPath, fmt.Sprintf("%dM", s.imageSizeMB))
+	cmd := exec.Command("mkfs.ext4", "-d", srcDir, imgPath, fmt.Sprintf("%dM", sizeMB))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -152,6 +157,30 @@ func copyFile(src, dst string) error {
 
 	_, err = io.Copy(out, in)
 	return err
+}
+
+// measuredSizeMB walks dir, sums file sizes, adds 20% overhead, and rounds up
+// to the nearest MB with a 8MB minimum (mkfs.ext4 needs room for metadata).
+func measuredSizeMB(dir string) (int, error) {
+	var total int64
+	err := filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			total += info.Size()
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	withOverhead := int64(float64(total) * 1.2)
+	mb := (withOverhead + (1<<20 - 1)) >> 20 // round up to nearest MB
+	if mb < 8 {
+		mb = 8
+	}
+	return int(mb), nil
 }
 
 func isValidName(s string) bool {
