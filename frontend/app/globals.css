@@ -53,11 +53,12 @@ body {
   color: #ededed;
 }
 .sidebar .newGameButton svg {
-  margin-right: 5px;
+  /* 16px icon + 9px gap keeps the label in the same column as the 20px + 5px nav rows */
+  margin-right: 9px;
 }
 .sidebar .nav {
   margin: 0 15px 10px 15px;
-  padding: 7px 5px 7px 5px;
+  padding: 7px 10px 7px 10px;
   display: flex;
   justify-content: left;
   align-items: center;

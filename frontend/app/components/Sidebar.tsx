@@ -19,12 +19,12 @@ export default function Sidebar() {
         <Link href="/servers/create" className="newGameButton">
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
             className="lucide lucide-plus-icon lucide-plus"
@@ -47,7 +47,7 @@ export default function Sidebar() {
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
-            stroke-linejoin="round"
+            strokeLinejoin="round"
             className="lucide lucide-server-icon lucide-server"
           >
             <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
@@ -79,6 +79,28 @@ export default function Sidebar() {
             <circle cx="9" cy="7" r="4" />
           </svg>
           <span>Friends</span>
+        </Link>
+        <Link
+          href="/functions"
+          className={`nav${pathname === "/functions" ? " selected" : ""}`}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="lucide lucide-square-function-icon lucide-square-function"
+          >
+            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+            <path d="M9 17c2 0 2.8-1 2.8-2.8V10c0-2 1-3.3 3.2-3" />
+            <path d="M9 11.2h5.7" />
+          </svg>
+          <span>Functions</span>
         </Link>
       </div>
 

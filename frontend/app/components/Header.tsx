@@ -8,6 +8,10 @@ export default function Sidebar() {
     details = "Your servers";
   } else if (pathname === "/friends") {
     details = "Your friends";
+  } else if (pathname === "/functions") {
+    details = "Your functions";
+  } else if (pathname === "/functions/create") {
+    details = "Create a function";
   }
   return (
     <div className="header">
