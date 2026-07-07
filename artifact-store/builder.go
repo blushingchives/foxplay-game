@@ -159,26 +159,34 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-// measuredSizeMB walks dir, sums file sizes, adds 20% overhead, and rounds up
-// to the nearest MB with a 8MB minimum (mkfs.ext4 needs room for metadata).
+// measuredSizeMB walks dir and estimates the ext4 image size needed to hold
+// it. Every file occupies whole 4KB blocks, each entry costs roughly a block
+// of inode/directory metadata, and small images still need ~4MB for the
+// journal plus group tables — so we round per file, add per-entry overhead,
+// 20% slack, and a fixed 8MB floor on top.
 func measuredSizeMB(dir string) (int, error) {
+	const blockSize = 4096
 	var total int64
+	var entries int64
 	err := filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
+		entries++
 		if !info.IsDir() {
-			total += info.Size()
+			total += (info.Size() + blockSize - 1) / blockSize * blockSize
 		}
 		return nil
 	})
 	if err != nil {
 		return 0, err
 	}
+	total += entries * blockSize
 	withOverhead := int64(float64(total) * 1.2)
 	mb := (withOverhead + (1<<20 - 1)) >> 20 // round up to nearest MB
-	if mb < 8 {
-		mb = 8
+	mb += 8                                  // journal + group tables
+	if mb < 16 {
+		mb = 16
 	}
 	return int(mb), nil
 }
