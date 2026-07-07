@@ -40,9 +40,10 @@ type InvocationEvent struct {
 }
 
 type InvocationResponse struct {
-	Status  int                 `json:"status"`
-	Headers map[string][]string `json:"headers"`
-	Body    string              `json:"body"`
+	Status     int                 `json:"status"`
+	Headers    map[string][]string `json:"headers"`
+	Body       string              `json:"body"`
+	InfraError bool                `json:"infra_error,omitempty"`
 }
 
 func main() {
@@ -166,7 +167,7 @@ func handleInvocation(fd int) {
 
 func sendError(conn net.Conn, status int, msg string) {
 	log.Printf("error %d: %s", status, msg)
-	json.NewEncoder(conn).Encode(InvocationResponse{Status: status, Body: msg})
+	json.NewEncoder(conn).Encode(InvocationResponse{Status: status, Body: msg, InfraError: true})
 }
 
 // listenVsock creates an AF_VSOCK listener using raw syscalls.

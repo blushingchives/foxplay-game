@@ -158,8 +158,8 @@ func (m *PoolManager) Invoke(ctx context.Context, functionName string, event Inv
 		return nil, err
 	}
 
-	if resp.Status >= 500 {
-		log.Printf("[%s] VM %s returned status %d, killing", functionName, vm.id, resp.Status)
+	if resp.InfraError {
+		log.Printf("[%s] VM %s infra error (status %d), killing", functionName, vm.id, resp.Status)
 		m.discardVM(pool, functionName, vm)
 		return resp, nil
 	}

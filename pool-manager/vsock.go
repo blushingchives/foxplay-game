@@ -21,10 +21,13 @@ type InvocationEvent struct {
 }
 
 // InvocationResponse is the HTTP response returned from the VM.
+// InfraError marks responses fabricated by the bootstrap when it could not
+// reach the app, as opposed to real app responses (which may also be 5xx).
 type InvocationResponse struct {
-	Status  int                 `json:"status"`
-	Headers map[string][]string `json:"headers"`
-	Body    string              `json:"body"`
+	Status     int                 `json:"status"`
+	Headers    map[string][]string `json:"headers"`
+	Body       string              `json:"body"`
+	InfraError bool                `json:"infra_error,omitempty"`
 }
 
 // connectVsock opens a connection to the bootstrap inside a Firecracker VM.
