@@ -47,8 +47,8 @@ func killVM(vm *VM) {
 	os.Remove(vm.vsockPath)
 }
 
-// fcPut sends a PUT request to the Firecracker API via its Unix socket.
-func fcPut(socketPath, path string, body any) error {
+// fcRequest sends a request to the Firecracker API via its Unix socket.
+func fcRequest(method, socketPath, path string, body any) error {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func fcPut(socketPath, path string, body any) error {
 		},
 	}
 
-	req, err := http.NewRequest(http.MethodPut, "http://localhost"+path, bytes.NewReader(data))
+	req, err := http.NewRequest(method, "http://localhost"+path, bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -81,6 +81,24 @@ func fcPut(socketPath, path string, body any) error {
 	}
 
 	return nil
+}
+
+func fcPut(socketPath, path string, body any) error {
+	return fcRequest(http.MethodPut, socketPath, path, body)
+}
+
+// loadSnapshot boots a fresh firecracker process straight into a snapshot
+// created by the artifact-store at deploy time, and resumes it. The drive
+// and vsock paths recorded in the snapshot must still exist on the host.
+func loadSnapshot(socketPath, snapPath, memPath string) error {
+	return fcPut(socketPath, "/snapshot/load", map[string]any{
+		"snapshot_path": snapPath,
+		"mem_backend": map[string]any{
+			"backend_type": "File",
+			"backend_path": memPath,
+		},
+		"resume_vm": true,
+	})
 }
 
 func configureVM(socketPath, kernelPath, baseRootfs, codeRootfs, vsockPath string) error {

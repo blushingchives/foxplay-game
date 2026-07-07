@@ -10,7 +10,10 @@ import (
 
 func main() {
 	store := &ArtifactStore{
-		functionsDir: getEnv("FUNCTIONS_DIR", "/tmp/functions"),
+		functionsDir:   getEnv("FUNCTIONS_DIR", "/tmp/functions"),
+		kernelPath:     getEnv("KERNEL_PATH", "/tmp/fc/vmlinux.bin"),
+		baseRootfs:     getEnv("BASE_ROOTFS", "/tmp/node22.ext4"),
+		firecrackerBin: getEnv("FIRECRACKER_BIN", "firecracker"),
 	}
 
 	os.MkdirAll(store.functionsDir, 0755)

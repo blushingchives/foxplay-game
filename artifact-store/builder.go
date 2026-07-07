@@ -14,7 +14,10 @@ import (
 )
 
 type ArtifactStore struct {
-	functionsDir string
+	functionsDir   string
+	kernelPath     string
+	baseRootfs     string
+	firecrackerBin string
 }
 
 func (s *ArtifactStore) handleDeploy(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +53,14 @@ func (s *ArtifactStore) handleDeploy(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] build failed: %v", functionName, err)
 		http.Error(w, "build failed: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Best effort: without a snapshot the function still works, it just
+	// cold boots on first invoke.
+	if err := s.snapshotFunction(functionName); err != nil {
+		log.Printf("[%s] snapshot failed: %v (function will cold boot)", functionName, err)
+	} else {
+		log.Printf("[%s] snapshot ready", functionName)
 	}
 
 	log.Printf("[%s] deployed", functionName)

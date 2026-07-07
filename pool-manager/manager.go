@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -246,46 +248,135 @@ func (m *PoolManager) failWaiters(pool *Pool) {
 }
 
 func (m *PoolManager) bootVM(functionName string) (*VM, error) {
-	id := newID()
-	socketPath := fmt.Sprintf("/tmp/fc-%s.sock", id)
-	vsockPath := fmt.Sprintf("/tmp/fc-%s-vsock.sock", id)
-	codeRootfs := fmt.Sprintf("%s/%s.ext4", m.config.FunctionsDir, functionName)
+	// Snapshots are created by the artifact-store at deploy time. Restore
+	// reuses the vsock UDS path baked into the snapshot, so it is only safe
+	// while at most one VM per function can exist (MaxVMs == 1) — concurrent
+	// VMs of one function would fight over the same socket.
+	if m.config.MaxVMs == 1 && m.snapshotUsable(functionName) {
+		vm, err := m.restoreVM(functionName)
+		if err == nil {
+			return vm, nil
+		}
+		log.Printf("[%s] snapshot restore failed: %v — falling back to cold boot", functionName, err)
+		m.removeSnapshot(functionName)
+	}
 
-	vm := &VM{
+	return m.coldBootVM(functionName)
+}
+
+func (m *PoolManager) newVMHandle(functionName string, canonicalVsock bool) *VM {
+	id := newID()
+	vsockPath := fmt.Sprintf("/tmp/fc-%s-vsock.sock", id)
+	if canonicalVsock {
+		// must match the path recorded in the function's snapshot
+		vsockPath = fmt.Sprintf("/tmp/fc-fn-%s-vsock.sock", functionName)
+	}
+	return &VM{
 		id:         id,
-		socketPath: socketPath,
+		socketPath: fmt.Sprintf("/tmp/fc-%s.sock", id),
 		vsockPath:  vsockPath,
 		state:      StateBooting,
 		function:   functionName,
 	}
+}
 
-	pid, err := spawnFirecracker(m.config.FirecrackerBin, socketPath)
+// restoreVM spawns a firecracker process and resumes it from the function's
+// snapshot, skipping the kernel boot and app startup entirely.
+func (m *PoolManager) restoreVM(functionName string) (*VM, error) {
+	vm := m.newVMHandle(functionName, true)
+	snapPath, memPath := m.snapshotPaths(functionName)
+
+	// a stale UDS file from a previous VM would break the vsock bind
+	os.Remove(vm.vsockPath)
+
+	pid, err := spawnFirecracker(m.config.FirecrackerBin, vm.socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("spawn firecracker: %w", err)
 	}
 	vm.pid = pid
 
-	if err := configureVM(socketPath, m.config.KernelPath, m.config.BaseRootfs, codeRootfs, vsockPath); err != nil {
+	if err := loadSnapshot(vm.socketPath, snapPath, memPath); err != nil {
+		killVM(vm)
+		return nil, fmt.Errorf("load snapshot: %w", err)
+	}
+
+	if err := waitForVsock(vm.vsockPath, 10*time.Second); err != nil {
+		killVM(vm)
+		return nil, fmt.Errorf("restored VM not ready: %w", err)
+	}
+
+	vm.state = StateWarm
+	vm.lastUsed = time.Now()
+	log.Printf("[%s] VM %s restored from snapshot", functionName, vm.id)
+	return vm, nil
+}
+
+func (m *PoolManager) coldBootVM(functionName string) (*VM, error) {
+	vm := m.newVMHandle(functionName, false)
+	codeRootfs := fmt.Sprintf("%s/%s.ext4", m.config.FunctionsDir, functionName)
+
+	pid, err := spawnFirecracker(m.config.FirecrackerBin, vm.socketPath)
+	if err != nil {
+		return nil, fmt.Errorf("spawn firecracker: %w", err)
+	}
+	vm.pid = pid
+
+	if err := configureVM(vm.socketPath, m.config.KernelPath, m.config.BaseRootfs, codeRootfs, vm.vsockPath); err != nil {
 		killVM(vm)
 		return nil, fmt.Errorf("configure VM: %w", err)
 	}
 
-	if err := startVM(socketPath); err != nil {
+	if err := startVM(vm.socketPath); err != nil {
 		killVM(vm)
 		return nil, fmt.Errorf("start VM: %w", err)
 	}
 
-	log.Printf("[%s] VM %s booting, waiting for bootstrap...", functionName, id)
+	log.Printf("[%s] VM %s booting, waiting for bootstrap...", functionName, vm.id)
 
-	if err := waitForVsock(vsockPath, 30*time.Second); err != nil {
+	if err := waitForVsock(vm.vsockPath, 30*time.Second); err != nil {
 		killVM(vm)
 		return nil, fmt.Errorf("VM not ready: %w", err)
 	}
 
 	vm.state = StateWarm
 	vm.lastUsed = time.Now()
-	log.Printf("[%s] VM %s ready", functionName, id)
+	log.Printf("[%s] VM %s ready", functionName, vm.id)
 	return vm, nil
+}
+
+func (m *PoolManager) snapshotPaths(functionName string) (snapPath, memPath string) {
+	base := filepath.Join(m.config.FunctionsDir, functionName)
+	return base + ".snap", base + ".mem"
+}
+
+func (m *PoolManager) removeSnapshot(functionName string) {
+	snapPath, memPath := m.snapshotPaths(functionName)
+	os.Remove(snapPath)
+	os.Remove(memPath)
+}
+
+// snapshotUsable reports whether a deploy-time snapshot from the
+// artifact-store exists and is newer than both rootfs images it references —
+// a redeploy of the function or a rebuild of the base image silently
+// invalidates the old snapshot.
+func (m *PoolManager) snapshotUsable(functionName string) bool {
+	snapPath, memPath := m.snapshotPaths(functionName)
+	snapInfo, err := os.Stat(snapPath)
+	if err != nil {
+		return false
+	}
+	if _, err := os.Stat(memPath); err != nil {
+		return false
+	}
+	code, err := os.Stat(fmt.Sprintf("%s/%s.ext4", m.config.FunctionsDir, functionName))
+	if err != nil || !snapInfo.ModTime().After(code.ModTime()) {
+		return false
+	}
+	base, err := os.Stat(m.config.BaseRootfs)
+	if err != nil || !snapInfo.ModTime().After(base.ModTime()) {
+		return false
+	}
+	return true
 }
 
 // idleSweeper kills warm VMs that have been idle longer than idleTimeout.
