@@ -55,9 +55,14 @@ func (s *ArtifactStore) handleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Best effort: without a snapshot the function still works, it just
-	// cold boots on first invoke.
-	if err := s.snapshotFunction(functionName); err != nil {
+	// Snapshotting is opt-out: the frontend sends snapshot=false to skip it
+	// (the function then cold boots on every start). Best effort either way:
+	// without a snapshot the function still works.
+	if r.FormValue("snapshot") == "false" {
+		os.Remove(filepath.Join(s.functionsDir, functionName+".snap"))
+		os.Remove(filepath.Join(s.functionsDir, functionName+".mem"))
+		log.Printf("[%s] snapshot disabled by request", functionName)
+	} else if err := s.snapshotFunction(functionName); err != nil {
 		log.Printf("[%s] snapshot failed: %v (function will cold boot)", functionName, err)
 	} else {
 		log.Printf("[%s] snapshot ready", functionName)
