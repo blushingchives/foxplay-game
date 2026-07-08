@@ -1,0 +1,7 @@
+# local env files (see per-service .env.example)
+.env
+
+# server-built Go binaries
+pool-manager/pool-manager
+artifact-store/artifact-store
+metrics/metrics

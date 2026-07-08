@@ -20,15 +20,21 @@ type InvocationEvent struct {
 	InfraError  bool   `json:"infra_error"`
 	CPUMs       int64  `json:"cpu_ms"`
 	MemPeakKB   int64  `json:"mem_peak_kb"`
+	RequestBody string `json:"request_body"`
 }
 
 type DeploymentEvent struct {
-	Function        string `json:"function"`
-	ImageSizeBytes  int64  `json:"image_size_bytes"`
-	BuildMs         int64  `json:"build_ms"`
-	SnapshotEnabled bool   `json:"snapshot_enabled"`
-	SnapshotMs      int64  `json:"snapshot_ms"`
-	SnapshotOK      bool   `json:"snapshot_ok"`
+	Function            string `json:"function"`
+	ImageSizeBytes      int64  `json:"image_size_bytes"`
+	BuildMs             int64  `json:"build_ms"`
+	SnapshotEnabled     bool   `json:"snapshot_enabled"`
+	SnapshotMs          int64  `json:"snapshot_ms"`
+	SnapshotOK          bool   `json:"snapshot_ok"`
+	KernelPath          string `json:"kernel_path"`
+	KernelSizeBytes     int64  `json:"kernel_size_bytes"`
+	BaseRootfsPath      string `json:"base_rootfs_path"`
+	BaseRootfsSizeBytes int64  `json:"base_rootfs_size_bytes"`
+	BootstrapVersion    string `json:"bootstrap_version"`
 }
 
 type FunctionSummary struct {
@@ -52,12 +58,17 @@ type StartTypeStats struct {
 }
 
 type DeploymentRow struct {
-	CreatedAt       time.Time `json:"created_at"`
-	ImageSizeBytes  int64     `json:"image_size_bytes"`
-	BuildMs         int64     `json:"build_ms"`
-	SnapshotEnabled bool      `json:"snapshot_enabled"`
-	SnapshotMs      int64     `json:"snapshot_ms"`
-	SnapshotOK      bool      `json:"snapshot_ok"`
+	CreatedAt           time.Time `json:"created_at"`
+	ImageSizeBytes      int64     `json:"image_size_bytes"`
+	BuildMs             int64     `json:"build_ms"`
+	SnapshotEnabled     bool      `json:"snapshot_enabled"`
+	SnapshotMs          int64     `json:"snapshot_ms"`
+	SnapshotOK          bool      `json:"snapshot_ok"`
+	KernelPath          string    `json:"kernel_path"`
+	KernelSizeBytes     int64     `json:"kernel_size_bytes"`
+	BaseRootfsPath      string    `json:"base_rootfs_path"`
+	BaseRootfsSizeBytes int64     `json:"base_rootfs_size_bytes"`
+	BootstrapVersion    string    `json:"bootstrap_version"`
 }
 
 type FunctionDetail struct {
@@ -78,6 +89,7 @@ type InvocationRow struct {
 	InfraError  bool      `json:"infra_error"`
 	CPUMs       int64     `json:"cpu_ms"`
 	MemPeakKB   int64     `json:"mem_peak_kb"`
+	RequestBody string    `json:"request_body"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -137,6 +149,13 @@ var schema = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_deployments_fn_time
 		ON deployments (function_name, created_at DESC)`,
+	// added after initial rollout — upgrades existing tables in place
+	`ALTER TABLE invocations ADD COLUMN IF NOT EXISTS request_body TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS kernel_path TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS kernel_size_bytes BIGINT NOT NULL DEFAULT 0`,
+	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS base_rootfs_path TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS base_rootfs_size_bytes BIGINT NOT NULL DEFAULT 0`,
+	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS bootstrap_version TEXT NOT NULL DEFAULT ''`,
 }
 
 func (s *Store) ensureSchemaLoop() {
@@ -163,18 +182,20 @@ func (s *Store) ensureSchema() error {
 
 func (s *Store) InsertInvocation(ev InvocationEvent) error {
 	_, err := s.db.Exec(`INSERT INTO invocations
-		(function_name, start_type, queue_wait_ms, boot_ms, invoke_ms, status, infra_error, cpu_ms, mem_peak_kb)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		(function_name, start_type, queue_wait_ms, boot_ms, invoke_ms, status, infra_error, cpu_ms, mem_peak_kb, request_body)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		ev.Function, ev.StartType, ev.QueueWaitMs, ev.BootMs, ev.InvokeMs,
-		ev.Status, ev.InfraError, ev.CPUMs, ev.MemPeakKB)
+		ev.Status, ev.InfraError, ev.CPUMs, ev.MemPeakKB, ev.RequestBody)
 	return err
 }
 
 func (s *Store) InsertDeployment(ev DeploymentEvent) error {
 	_, err := s.db.Exec(`INSERT INTO deployments
-		(function_name, image_size_bytes, build_ms, snapshot_enabled, snapshot_ms, snapshot_ok)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		ev.Function, ev.ImageSizeBytes, ev.BuildMs, ev.SnapshotEnabled, ev.SnapshotMs, ev.SnapshotOK)
+		(function_name, image_size_bytes, build_ms, snapshot_enabled, snapshot_ms, snapshot_ok,
+		 kernel_path, kernel_size_bytes, base_rootfs_path, base_rootfs_size_bytes, bootstrap_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		ev.Function, ev.ImageSizeBytes, ev.BuildMs, ev.SnapshotEnabled, ev.SnapshotMs, ev.SnapshotOK,
+		ev.KernelPath, ev.KernelSizeBytes, ev.BaseRootfsPath, ev.BaseRootfsSizeBytes, ev.BootstrapVersion)
 	return err
 }
 
@@ -287,9 +308,11 @@ func (s *Store) FunctionDetail(name string) (*FunctionDetail, error) {
 	}
 
 	var dep DeploymentRow
-	err = s.db.QueryRow(`SELECT created_at, image_size_bytes, build_ms, snapshot_enabled, snapshot_ms, snapshot_ok
+	err = s.db.QueryRow(`SELECT created_at, image_size_bytes, build_ms, snapshot_enabled, snapshot_ms, snapshot_ok,
+		kernel_path, kernel_size_bytes, base_rootfs_path, base_rootfs_size_bytes, bootstrap_version
 		FROM deployments WHERE function_name = $1 ORDER BY created_at DESC LIMIT 1`, name).
-		Scan(&dep.CreatedAt, &dep.ImageSizeBytes, &dep.BuildMs, &dep.SnapshotEnabled, &dep.SnapshotMs, &dep.SnapshotOK)
+		Scan(&dep.CreatedAt, &dep.ImageSizeBytes, &dep.BuildMs, &dep.SnapshotEnabled, &dep.SnapshotMs, &dep.SnapshotOK,
+			&dep.KernelPath, &dep.KernelSizeBytes, &dep.BaseRootfsPath, &dep.BaseRootfsSizeBytes, &dep.BootstrapVersion)
 	switch err {
 	case nil:
 		d.LastDeployment = &dep
@@ -307,7 +330,7 @@ func (s *Store) FunctionDetail(name string) (*FunctionDetail, error) {
 
 func (s *Store) RecentInvocations(name string, limit int) ([]InvocationRow, error) {
 	rows, err := s.db.Query(`SELECT start_type, queue_wait_ms, boot_ms, invoke_ms,
-		status, infra_error, cpu_ms, mem_peak_kb, created_at
+		status, infra_error, cpu_ms, mem_peak_kb, request_body, created_at
 		FROM invocations WHERE function_name = $1
 		ORDER BY created_at DESC LIMIT $2`, name, limit)
 	if err != nil {
@@ -319,7 +342,7 @@ func (s *Store) RecentInvocations(name string, limit int) ([]InvocationRow, erro
 	for rows.Next() {
 		var r InvocationRow
 		if err := rows.Scan(&r.StartType, &r.QueueWaitMs, &r.BootMs, &r.InvokeMs,
-			&r.Status, &r.InfraError, &r.CPUMs, &r.MemPeakKB, &r.CreatedAt); err != nil {
+			&r.Status, &r.InfraError, &r.CPUMs, &r.MemPeakKB, &r.RequestBody, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

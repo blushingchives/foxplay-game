@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"unicode/utf8"
 )
 
 var metricsClient = &http.Client{Timeout: 2 * time.Second}
@@ -31,6 +32,23 @@ type InvocationMetric struct {
 	InfraError  bool   `json:"infra_error"`
 	CPUMs       int64  `json:"cpu_ms"`
 	MemPeakKB   int64  `json:"mem_peak_kb"`
+	RequestBody string `json:"request_body"`
+}
+
+// maxRecordedBodyBytes caps the request body stored per invocation so large
+// payloads can't bloat the metrics database.
+const maxRecordedBodyBytes = 4096
+
+func truncateBody(s string) string {
+	if len(s) <= maxRecordedBodyBytes {
+		return s
+	}
+	cut := maxRecordedBodyBytes
+	// don't split a multi-byte UTF-8 sequence
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…(truncated)"
 }
 
 // emitMetric POSTs payload to the metrics service in the background.

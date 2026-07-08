@@ -182,6 +182,7 @@ func (m *PoolManager) Invoke(ctx context.Context, functionName string, event Inv
 		BootMs:      bootMs,
 		InvokeMs:    time.Since(invokeStart).Milliseconds(),
 		MemPeakKB:   readPeakRSSKB(vm.pid),
+		RequestBody: truncateBody(event.Body),
 	}
 	if cpuAfter, ok := readCPUTicks(vm.pid); ok && cpuOK && cpuAfter >= cpuBefore {
 		rec.CPUMs = cpuTicksToMs(cpuAfter - cpuBefore)
