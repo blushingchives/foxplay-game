@@ -37,6 +37,9 @@ type VM struct {
 	state      VMState
 	function   string
 	lastUsed   time.Time
+	bootKind   string // "cold" or "restored" — how this VM was created
+	bootMs     int64  // wall-clock ms of the boot that created it
+	fresh      bool   // true until its first invocation completes
 }
 
 type waiter struct {
@@ -102,10 +105,13 @@ func (m *PoolManager) Invoke(ctx context.Context, functionName string, event Inv
 	maxVMs := m.config.MaxVMs
 
 	var vm *VM
+	var startType string
+	var queueWaitMs, bootMs int64
 
 	// Fast path: try warm pool without locking
 	select {
 	case vm = <-pool.warm:
+		startType = "warm"
 		log.Printf("[%s] reusing warm VM %s", functionName, vm.id)
 	default:
 		// Slow path: decide whether to boot or queue
@@ -116,6 +122,7 @@ func (m *PoolManager) Invoke(ctx context.Context, functionName string, event Inv
 		select {
 		case vm = <-pool.warm:
 			pool.mu.Unlock()
+			startType = "warm"
 			log.Printf("[%s] reusing warm VM %s", functionName, vm.id)
 		default:
 			if maxVMs <= 0 || pool.booted < maxVMs {
@@ -131,6 +138,7 @@ func (m *PoolManager) Invoke(ctx context.Context, functionName string, event Inv
 					m.failWaiters(pool)
 					return nil, fmt.Errorf("boot VM: %w", err)
 				}
+				startType, bootMs = vm.bootKind, vm.bootMs
 			} else {
 				// At max capacity — queue this request
 				w := &waiter{ch: make(chan *VM, 1), ctx: ctx}
@@ -138,10 +146,19 @@ func (m *PoolManager) Invoke(ctx context.Context, functionName string, event Inv
 				pool.mu.Unlock()
 				log.Printf("[%s] at max VMs (%d), request queued", functionName, maxVMs)
 
+				queueStart := time.Now()
 				select {
 				case vm = <-w.ch:
 					if vm == nil {
 						return nil, fmt.Errorf("[%s] queued request failed: VM boot error", functionName)
+					}
+					queueWaitMs = time.Since(queueStart).Milliseconds()
+					// The VM is either a recycled warm one handed over by
+					// returnVM, or a fresh replacement booted by discardVM.
+					if vm.fresh {
+						startType, bootMs = vm.bootKind, vm.bootMs
+					} else {
+						startType = "warm"
 					}
 					log.Printf("[%s] dequeued, got VM %s", functionName, vm.id)
 				case <-ctx.Done():
@@ -152,7 +169,32 @@ func (m *PoolManager) Invoke(ctx context.Context, functionName string, event Inv
 	}
 
 	vm.state = StateBusy
+	vm.fresh = false
+	cpuBefore, cpuOK := readCPUTicks(vm.pid)
+	invokeStart := time.Now()
 	resp, err := invokeViaVsock(vm.vsockPath, event)
+
+	// Sample /proc and emit now, before discardVM can SIGTERM the process.
+	rec := InvocationMetric{
+		Function:    functionName,
+		StartType:   startType,
+		QueueWaitMs: queueWaitMs,
+		BootMs:      bootMs,
+		InvokeMs:    time.Since(invokeStart).Milliseconds(),
+		MemPeakKB:   readPeakRSSKB(vm.pid),
+	}
+	if cpuAfter, ok := readCPUTicks(vm.pid); ok && cpuOK && cpuAfter >= cpuBefore {
+		rec.CPUMs = cpuTicksToMs(cpuAfter - cpuBefore)
+	}
+	switch {
+	case err != nil:
+		rec.InfraError = true // vsock/transport failure — no HTTP status
+	case resp.InfraError:
+		rec.Status, rec.InfraError = resp.Status, true
+	default:
+		rec.Status = resp.Status
+	}
+	emitMetric("/events/invocation", rec)
 
 	if err != nil {
 		log.Printf("[%s] VM %s unhealthy (vsock error), killing", functionName, vm.id)
@@ -248,6 +290,8 @@ func (m *PoolManager) failWaiters(pool *Pool) {
 }
 
 func (m *PoolManager) bootVM(functionName string) (*VM, error) {
+	start := time.Now()
+
 	// Snapshots are created by the artifact-store at deploy time. Restore
 	// reuses the vsock UDS path baked into the snapshot, so it is only safe
 	// while at most one VM per function can exist (MaxVMs == 1) — concurrent
@@ -255,13 +299,21 @@ func (m *PoolManager) bootVM(functionName string) (*VM, error) {
 	if m.config.MaxVMs == 1 && m.snapshotUsable(functionName) {
 		vm, err := m.restoreVM(functionName)
 		if err == nil {
+			vm.bootKind, vm.bootMs, vm.fresh = "restored", time.Since(start).Milliseconds(), true
 			return vm, nil
 		}
 		log.Printf("[%s] snapshot restore failed: %v — falling back to cold boot", functionName, err)
 		m.removeSnapshot(functionName)
 	}
 
-	return m.coldBootVM(functionName)
+	vm, err := m.coldBootVM(functionName)
+	if err != nil {
+		return nil, err
+	}
+	// A failed restore attempt counts into the cold bootMs — it's the
+	// latency the caller actually experienced.
+	vm.bootKind, vm.bootMs, vm.fresh = "cold", time.Since(start).Milliseconds(), true
+	return vm, nil
 }
 
 func (m *PoolManager) newVMHandle(functionName string, canonicalVsock bool) *VM {

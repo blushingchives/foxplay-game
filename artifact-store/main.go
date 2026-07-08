@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+	loadEnvFile()
 	store := &ArtifactStore{
 		functionsDir:   getEnv("FUNCTIONS_DIR", "/tmp/functions"),
 		kernelPath:     getEnv("KERNEL_PATH", "/tmp/fc/vmlinux.bin"),
@@ -50,4 +51,29 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// loadEnvFile reads KEY=VALUE lines from a .env file in the working
+// directory into the process environment. Variables already set externally
+// win. Blank lines and #-comments are ignored; values may be quoted.
+func loadEnvFile() {
+	data, err := os.ReadFile(".env")
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.Trim(strings.TrimSpace(value), `"'`)
+		if key != "" && os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
 }

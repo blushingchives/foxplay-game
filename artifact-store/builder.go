@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type ArtifactStore struct {
@@ -49,24 +50,42 @@ func (s *ArtifactStore) handleDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
+	buildStart := time.Now()
 	if err := s.buildAndStore(functionName, file); err != nil {
 		log.Printf("[%s] build failed: %v", functionName, err)
 		http.Error(w, "build failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	dep := DeploymentMetric{
+		Function:        functionName,
+		BuildMs:         time.Since(buildStart).Milliseconds(),
+		SnapshotEnabled: true,
+	}
+	if info, err := os.Stat(filepath.Join(s.functionsDir, functionName+".ext4")); err == nil {
+		dep.ImageSizeBytes = info.Size()
+	}
+
 	// Snapshotting is opt-out: the frontend sends snapshot=false to skip it
 	// (the function then cold boots on every start). Best effort either way:
 	// without a snapshot the function still works.
 	if r.FormValue("snapshot") == "false" {
+		dep.SnapshotEnabled = false
 		os.Remove(filepath.Join(s.functionsDir, functionName+".snap"))
 		os.Remove(filepath.Join(s.functionsDir, functionName+".mem"))
 		log.Printf("[%s] snapshot disabled by request", functionName)
-	} else if err := s.snapshotFunction(functionName); err != nil {
-		log.Printf("[%s] snapshot failed: %v (function will cold boot)", functionName, err)
 	} else {
-		log.Printf("[%s] snapshot ready", functionName)
+		snapStart := time.Now()
+		err := s.snapshotFunction(functionName)
+		dep.SnapshotMs = time.Since(snapStart).Milliseconds()
+		dep.SnapshotOK = err == nil
+		if err != nil {
+			log.Printf("[%s] snapshot failed: %v (function will cold boot)", functionName, err)
+		} else {
+			log.Printf("[%s] snapshot ready", functionName)
+		}
 	}
+	emitMetric("/events/deployment", dep)
 
 	log.Printf("[%s] deployed", functionName)
 	w.WriteHeader(http.StatusOK)
