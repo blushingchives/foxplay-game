@@ -210,6 +210,12 @@ type rawConn struct{ fd int }
 
 func (c *rawConn) Read(b []byte) (int, error) {
 	n, err := syscall.Read(c.fd, b)
+	if n < 0 {
+		// syscall.Read returns -1 on error, but io.Reader requires n >= 0 —
+		// a negative count makes callers like json.Decoder panic, and a
+		// panic in any goroutine kills init and with it the whole VM.
+		n = 0
+	}
 	if n == 0 && err == nil {
 		return 0, io.EOF
 	}
@@ -217,7 +223,11 @@ func (c *rawConn) Read(b []byte) (int, error) {
 }
 
 func (c *rawConn) Write(b []byte) (int, error) {
-	return syscall.Write(c.fd, b)
+	n, err := syscall.Write(c.fd, b)
+	if n < 0 {
+		n = 0
+	}
+	return n, err
 }
 
 func (c *rawConn) Close() error                       { return syscall.Close(c.fd) }
