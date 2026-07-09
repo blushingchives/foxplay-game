@@ -61,9 +61,22 @@ func (s *ArtifactStore) handleDeploy(w http.ResponseWriter, r *http.Request) {
 		Function:        functionName,
 		BuildMs:         time.Since(buildStart).Milliseconds(),
 		SnapshotEnabled: true,
+		KernelPath:      s.kernelPath,
+		BaseRootfsPath:  s.baseRootfs,
 	}
 	if info, err := os.Stat(filepath.Join(s.functionsDir, functionName+".ext4")); err == nil {
 		dep.ImageSizeBytes = info.Size()
+	}
+	if info, err := os.Stat(s.kernelPath); err == nil {
+		dep.KernelSizeBytes = info.Size()
+	}
+	if info, err := os.Stat(s.baseRootfs); err == nil {
+		dep.BaseRootfsSizeBytes = info.Size()
+	}
+	// Written by update-bootstrap.sh whenever a new bootstrap is installed
+	// into the base rootfs; empty if the image was built another way.
+	if b, err := os.ReadFile(s.baseRootfs + ".version"); err == nil {
+		dep.BootstrapVersion = strings.TrimSpace(string(b))
 	}
 
 	// Snapshotting is opt-out: the frontend sends snapshot=false to skip it

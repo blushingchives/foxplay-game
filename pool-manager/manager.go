@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -170,6 +171,9 @@ func (m *PoolManager) Invoke(ctx context.Context, functionName string, event Inv
 
 	vm.state = StateBusy
 	vm.fresh = false
+	// The full invocation envelope (method, path, query, headers, body) as
+	// received from the caller — recorded per invocation for the metrics.
+	requestJSON, _ := json.Marshal(event)
 	cpuBefore, cpuOK := readCPUTicks(vm.pid)
 	invokeStart := time.Now()
 	resp, err := invokeViaVsock(vm.vsockPath, event)
@@ -182,7 +186,7 @@ func (m *PoolManager) Invoke(ctx context.Context, functionName string, event Inv
 		BootMs:      bootMs,
 		InvokeMs:    time.Since(invokeStart).Milliseconds(),
 		MemPeakKB:   readPeakRSSKB(vm.pid),
-		RequestBody: truncateBody(event.Body),
+		RequestBody: truncateBody(string(requestJSON)),
 	}
 	if cpuAfter, ok := readCPUTicks(vm.pid); ok && cpuOK && cpuAfter >= cpuBefore {
 		rec.CPUMs = cpuTicksToMs(cpuAfter - cpuBefore)
