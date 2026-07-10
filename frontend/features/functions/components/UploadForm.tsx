@@ -2,13 +2,15 @@
 import { useState } from "react";
 import { toast } from "@/components/Toast";
 import FileDropzone from "@/features/functions/components/FileDropzone";
+import { useFunctions } from "@/features/functions/hooks/useFunctions";
 import { uploadFormSchema } from "@/lib/models";
 
 type Props = {
-  onDeployed: (name: string) => void;
+  onDeployed: () => void;
 };
 
 export default function UploadForm({ onDeployed }: Props) {
+  const { add, remove } = useFunctions();
   const [name, setName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [snapshot, setSnapshot] = useState(true);
@@ -42,11 +44,17 @@ export default function UploadForm({ onDeployed }: Props) {
 
     setUploading(true);
     const start = performance.now();
+    // Register first: the registry mints the function's id, and the
+    // artifact-store stores the image under that id. A failed deploy rolls
+    // the registration back so the name is immediately reusable.
+    let functionId: string | null = null;
     try {
+      functionId = (await add(functionName)).id;
+
       const formData = new FormData();
       formData.append("code", codeFile);
       formData.append("snapshot", String(parsed.data.snapshot));
-      const res = await fetch(`/api/artifact-store/deploy/${functionName}`, {
+      const res = await fetch(`/api/artifact-store/deploy/${functionId}`, {
         method: "POST",
         body: formData,
       });
@@ -56,9 +64,10 @@ export default function UploadForm({ onDeployed }: Props) {
           description: await res.text(),
           timeTakenMs: elapsed,
         });
+        await remove(functionId).catch(() => {});
         return;
       }
-      onDeployed(functionName);
+      onDeployed();
       toast.success("Deployed", {
         description: `${functionName} is ready to invoke`,
         timeTakenMs: elapsed,
@@ -67,9 +76,10 @@ export default function UploadForm({ onDeployed }: Props) {
       setFile(null);
     } catch (err) {
       toast.error(`Deploy ${functionName} failed`, {
-        description: String(err),
+        description: err instanceof Error ? err.message : String(err),
         timeTakenMs: performance.now() - start,
       });
+      if (functionId) await remove(functionId).catch(() => {});
     } finally {
       setUploading(false);
     }

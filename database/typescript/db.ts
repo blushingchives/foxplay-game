@@ -3,7 +3,7 @@
 // JSON-serialized by an API route.
 
 export interface DeploymentsRow {
-  function_name: string;
+  function_id: string;
   image_size_bytes: number;
   build_ms: number;
   snapshot_enabled: boolean;
@@ -23,10 +23,11 @@ export interface FunctionsRow {
   user_id: string | null;
   created_at: string;
   id: string;
+  deleted_at: string | null;
 }
 
 export interface InvocationsRow {
-  function_name: string;
+  function_id: string;
   start_type: string;
   queue_wait_ms: number;
   boot_ms: number;

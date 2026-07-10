@@ -13,6 +13,20 @@ export const functionNameSchema = z
     "Use lowercase letters, digits, and hyphens only",
   );
 
+// Ids are type-prefixed UUIDs, e.g. fn-b8965196-1caf-4d21-b4f0-6bdc5f6a617e
+const prefixedIdSchema = (prefix: string) =>
+  z
+    .string()
+    .regex(
+      new RegExp(
+        `^${prefix}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
+      ),
+      `invalid ${prefix} id`,
+    );
+export const functionIdSchema = prefixedIdSchema("fn");
+export const deploymentIdSchema = prefixedIdSchema("art");
+export const invocationIdSchema = prefixedIdSchema("log");
+
 // ---- users ----
 export const userSchema = z.object({
   id: z.string(), // Clerk user id once auth lands
@@ -23,10 +37,11 @@ export type User = z.infer<typeof userSchema>;
 
 // ---- functions (the registry) ----
 export const functionRowSchema = z.object({
-  id: z.uuid(),
+  id: functionIdSchema,
   name: functionNameSchema,
   user_id: z.string().nullable(), // NULL until Clerk auth lands
   created_at: z.string(),
+  deleted_at: z.string().nullable(), // soft delete — history stays attributable
 });
 export type FunctionRow = z.infer<typeof functionRowSchema>;
 
@@ -35,8 +50,8 @@ export const startTypeSchema = z.enum(["cold", "restored", "warm"]);
 export type StartType = z.infer<typeof startTypeSchema>;
 
 export const invocationSchema = z.object({
-  id: z.uuid(),
-  function_name: z.string(),
+  id: invocationIdSchema,
+  function_id: z.string(),
   start_type: startTypeSchema,
   queue_wait_ms: z.number(),
   boot_ms: z.number(),
@@ -50,17 +65,17 @@ export const invocationSchema = z.object({
 });
 export type Invocation = z.infer<typeof invocationSchema>;
 
-// shape returned per row by GET /api/functions/[name]/invocations
+// shape returned per row by GET /api/functions/[id]/invocations
 export const invocationRowSchema = invocationSchema.omit({
   id: true,
-  function_name: true,
+  function_id: true,
 });
 export type InvocationRow = z.infer<typeof invocationRowSchema>;
 
 // ---- deployments ----
 export const deploymentSchema = z.object({
-  id: z.uuid(),
-  function_name: z.string(),
+  id: deploymentIdSchema,
+  function_id: z.string(),
   image_size_bytes: z.number(),
   build_ms: z.number(),
   snapshot_enabled: z.boolean(),
@@ -75,10 +90,10 @@ export const deploymentSchema = z.object({
 });
 export type Deployment = z.infer<typeof deploymentSchema>;
 
-// shape returned as last_deployment by GET /api/functions/[name]
+// shape returned as last_deployment by GET /api/functions/[id]
 export const deploymentRowSchema = deploymentSchema.omit({
   id: true,
-  function_name: true,
+  function_id: true,
 });
 export type DeploymentRow = z.infer<typeof deploymentRowSchema>;
 

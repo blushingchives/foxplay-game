@@ -1,30 +1,44 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-async function fetchFunctions(): Promise<string[]> {
+export type FunctionListItem = {
+  id: string;
+  name: string;
+  created_at: string;
+};
+
+async function fetchFunctions(): Promise<FunctionListItem[]> {
   const res = await fetch("/api/functions");
   if (!res.ok) throw new Error("failed to load functions");
-  const data = await res.json();
-  return (data.functions as { name: string }[]).map((f) => f.name);
+  return (await res.json()).functions;
 }
 
-async function registerFunction(name: string) {
+// Registers a name and returns the new function's id — done before the
+// deploy, since the artifact-store stores the image under the id.
+async function registerFunction(name: string): Promise<{ id: string }> {
   const res = await fetch("/api/functions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? `register failed: ${res.status}`);
+  }
+  return res.json();
 }
 
-async function unregisterFunction(name: string) {
-  const res = await fetch(`/api/functions/${encodeURIComponent(name)}`, {
+async function unregisterFunction(id: string) {
+  const res = await fetch(`/api/functions/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? `delete failed: ${res.status}`);
+  }
 }
 
-// The list of registered functions, backed by Postgres via /api/functions.
+// The registry of active functions, backed by Postgres via /api/functions.
 export function useFunctions() {
   const queryClient = useQueryClient();
   const invalidate = () =>
@@ -46,6 +60,6 @@ export function useFunctions() {
     isLoading: query.isPending,
     isError: query.isError,
     add: (name: string) => register.mutateAsync(name),
-    remove: (name: string) => unregister.mutateAsync(name),
+    remove: (id: string) => unregister.mutateAsync(id),
   };
 }

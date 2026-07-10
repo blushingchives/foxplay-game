@@ -2,24 +2,30 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
 import PayloadEditor from "@/features/functions/components/PayloadEditor";
 import FunctionDetails from "@/features/functions/components/FunctionDetails";
 import { useFunctions } from "@/features/functions/hooks/useFunctions";
+import { functionDetailQueryOptions } from "@/features/functions/lib/api";
 import { DEFAULT_PAYLOAD, normalizeEvent } from "@/features/functions/lib/json";
+import { shortId } from "@/lib/id";
 
 type Props = {
-  name: string;
+  id: string;
 };
 
-export default function FunctionDetailClient({ name }: Props) {
+export default function FunctionDetailClient({ id }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { remove } = useFunctions();
   const [payload, setPayload] = useState(DEFAULT_PAYLOAD);
   const [invoking, setInvoking] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Shares the cache entry with FunctionDetails — one fetch serves both.
+  const detailQuery = useQuery(functionDetailQueryOptions(id));
+  const name = detailQuery.data?.name ?? "…";
 
   async function handleDelete() {
     if (
@@ -31,7 +37,7 @@ export default function FunctionDetailClient({ name }: Props) {
     }
     setDeleting(true);
     try {
-      await remove(name);
+      await remove(id);
       toast.success("Deleted", { description: `${name} was removed` });
       router.push("/functions");
     } catch (err) {
@@ -54,7 +60,7 @@ export default function FunctionDetailClient({ name }: Props) {
     setInvoking(true);
     const start = performance.now();
     try {
-      const res = await fetch(`/api/pool-manager/invoke/${name}`, {
+      const res = await fetch(`/api/pool-manager/invoke/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: event,
@@ -86,7 +92,7 @@ export default function FunctionDetailClient({ name }: Props) {
       // the metrics event is emitted fire-and-forget; give it a moment to
       // land before refreshing the details + history
       setTimeout(
-        () => queryClient.invalidateQueries({ queryKey: ["function", name] }),
+        () => queryClient.invalidateQueries({ queryKey: ["function", id] }),
         800,
       );
     }
@@ -117,7 +123,12 @@ export default function FunctionDetailClient({ name }: Props) {
           <span>Back to functions</span>
         </Link>
         <div className="flex items-center justify-between">
-          <h1 className="font-mono text-lg font-bold">{name}</h1>
+          <h1 className="font-mono text-lg font-bold">
+            {name}
+            <span className="ml-3 text-xs font-normal text-gray-400">
+              {shortId(id)}
+            </span>
+          </h1>
           <button
             type="button"
             onClick={handleDelete}
@@ -129,7 +140,7 @@ export default function FunctionDetailClient({ name }: Props) {
         </div>
       </div>
 
-      <FunctionDetails name={name} />
+      <FunctionDetails id={id} />
 
       <div className="flex flex-col gap-2">
         <PayloadEditor value={payload} onChange={setPayload} />

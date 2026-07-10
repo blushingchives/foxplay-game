@@ -10,7 +10,7 @@ export default async function FunctionDetail({
   return (
     <>
       <Header />
-      <FunctionDetailClient name={decodeURIComponent(id)} />
+      <FunctionDetailClient id={decodeURIComponent(id)} />
     </>
   );
 }

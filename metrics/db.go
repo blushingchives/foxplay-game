@@ -139,7 +139,7 @@ func (s *Store) waitReadyLoop() {
 
 func (s *Store) InsertInvocation(ev InvocationEvent) error {
 	_, err := s.db.Exec(`INSERT INTO invocations
-		(function_name, start_type, queue_wait_ms, boot_ms, invoke_ms, status, infra_error, cpu_ms, mem_peak_kb, request_body)
+		(function_id, start_type, queue_wait_ms, boot_ms, invoke_ms, status, infra_error, cpu_ms, mem_peak_kb, request_body)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		ev.Function, ev.StartType, ev.QueueWaitMs, ev.BootMs, ev.InvokeMs,
 		ev.Status, ev.InfraError, ev.CPUMs, ev.MemPeakKB, ev.RequestBody)
@@ -148,7 +148,7 @@ func (s *Store) InsertInvocation(ev InvocationEvent) error {
 
 func (s *Store) InsertDeployment(ev DeploymentEvent) error {
 	_, err := s.db.Exec(`INSERT INTO deployments
-		(function_name, image_size_bytes, build_ms, snapshot_enabled, snapshot_ms, snapshot_ok,
+		(function_id, image_size_bytes, build_ms, snapshot_enabled, snapshot_ms, snapshot_ok,
 		 kernel_path, kernel_size_bytes, base_rootfs_path, base_rootfs_size_bytes, bootstrap_version)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		ev.Function, ev.ImageSizeBytes, ev.BuildMs, ev.SnapshotEnabled, ev.SnapshotMs, ev.SnapshotOK,
@@ -169,9 +169,9 @@ func (s *Store) ListFunctions() ([]FunctionSummary, error) {
 		return f
 	}
 
-	rows, err := s.db.Query(`SELECT function_name, count(*), max(created_at),
+	rows, err := s.db.Query(`SELECT function_id, count(*), max(created_at),
 		count(*) FILTER (WHERE infra_error)
-		FROM invocations GROUP BY function_name`)
+		FROM invocations GROUP BY function_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -193,9 +193,9 @@ func (s *Store) ListFunctions() ([]FunctionSummary, error) {
 
 	// has_snapshot means "snapshot succeeded at the most recent deploy"; the
 	// pool manager may since have deleted a snapshot that failed to restore.
-	rows, err = s.db.Query(`SELECT DISTINCT ON (function_name)
-		function_name, image_size_bytes, snapshot_enabled AND snapshot_ok, created_at
-		FROM deployments ORDER BY function_name, created_at DESC`)
+	rows, err = s.db.Query(`SELECT DISTINCT ON (function_id)
+		function_id, image_size_bytes, snapshot_enabled AND snapshot_ok, created_at
+		FROM deployments ORDER BY function_id, created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func (s *Store) FunctionDetail(name string) (*FunctionDetail, error) {
 
 	var last sql.NullTime
 	err := s.db.QueryRow(`SELECT count(*), max(created_at), count(*) FILTER (WHERE infra_error)
-		FROM invocations WHERE function_name = $1`, name).
+		FROM invocations WHERE function_id = $1`, name).
 		Scan(&d.Runs, &last, &d.InfraErrors)
 	if err != nil {
 		return nil, err
@@ -245,7 +245,7 @@ func (s *Store) FunctionDetail(name string) (*FunctionDetail, error) {
 		(percentile_cont(0.95) WITHIN GROUP (ORDER BY invoke_ms))::bigint,
 		avg(boot_ms)::bigint, avg(queue_wait_ms)::bigint,
 		avg(cpu_ms)::bigint, max(mem_peak_kb)
-		FROM invocations WHERE function_name = $1 GROUP BY start_type`, name)
+		FROM invocations WHERE function_id = $1 GROUP BY start_type`, name)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func (s *Store) FunctionDetail(name string) (*FunctionDetail, error) {
 	var dep DeploymentRow
 	err = s.db.QueryRow(`SELECT created_at, image_size_bytes, build_ms, snapshot_enabled, snapshot_ms, snapshot_ok,
 		kernel_path, kernel_size_bytes, base_rootfs_path, base_rootfs_size_bytes, bootstrap_version
-		FROM deployments WHERE function_name = $1 ORDER BY created_at DESC LIMIT 1`, name).
+		FROM deployments WHERE function_id = $1 ORDER BY created_at DESC LIMIT 1`, name).
 		Scan(&dep.CreatedAt, &dep.ImageSizeBytes, &dep.BuildMs, &dep.SnapshotEnabled, &dep.SnapshotMs, &dep.SnapshotOK,
 			&dep.KernelPath, &dep.KernelSizeBytes, &dep.BaseRootfsPath, &dep.BaseRootfsSizeBytes, &dep.BootstrapVersion)
 	switch err {
@@ -288,7 +288,7 @@ func (s *Store) FunctionDetail(name string) (*FunctionDetail, error) {
 func (s *Store) RecentInvocations(name string, limit int) ([]InvocationRow, error) {
 	rows, err := s.db.Query(`SELECT start_type, queue_wait_ms, boot_ms, invoke_ms,
 		status, infra_error, cpu_ms, mem_peak_kb, request_body, created_at
-		FROM invocations WHERE function_name = $1
+		FROM invocations WHERE function_id = $1
 		ORDER BY created_at DESC LIMIT $2`, name, limit)
 	if err != nil {
 		return nil, err

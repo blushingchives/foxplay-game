@@ -1,8 +1,10 @@
 "use client";
 import Link from "next/link";
+import { shortId } from "@/lib/id";
+import type { FunctionListItem } from "@/features/functions/hooks/useFunctions";
 
 type Props = {
-  functions: string[];
+  functions: FunctionListItem[];
 };
 
 export default function FunctionList({ functions }: Props) {
@@ -13,14 +15,15 @@ export default function FunctionList({ functions }: Props) {
       )}
       {functions.map((fn) => (
         <li
-          key={fn}
+          key={fn.id}
           className="flex bg-white border border-[#efefea] rounded transition-all duration-150 hover:border-[#f26a1f] hover:shadow-sm"
         >
           <Link
-            href={`/functions/${encodeURIComponent(fn)}`}
-            className="font-mono flex-1 px-4 py-3 transition-all duration-150 hover:text-[#f26a1f] hover:translate-x-1"
+            href={`/functions/${fn.id}`}
+            className="font-mono flex-1 flex items-center justify-between px-4 py-3 transition-all duration-150 hover:text-[#f26a1f] hover:translate-x-1"
           >
-            {fn}
+            <span>{fn.name}</span>
+            <span className="text-xs text-gray-400">{shortId(fn.id)}</span>
           </Link>
         </li>
       ))}

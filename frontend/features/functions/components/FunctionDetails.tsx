@@ -1,14 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
-import type { DeploymentRow, InvocationRow } from "@/lib/models";
-
-type Detail = {
-  name: string;
-  runs: number;
-  last_run: string | null;
-  infra_errors: number;
-  last_deployment: DeploymentRow | null;
-};
+import type { InvocationRow } from "@/lib/models";
+import { functionDetailQueryOptions } from "@/features/functions/lib/api";
 
 function fmtBytes(n: number) {
   if (n <= 0) return "—";
@@ -27,26 +20,19 @@ function avg(xs: number[]) {
 }
 
 type Props = {
-  name: string;
+  id: string;
 };
 
-export default function FunctionDetails({ name }: Props) {
-  // Both queries share the ["function", name] key prefix, so one
-  // invalidation after an invoke refreshes details and history together.
-  const detailQuery = useQuery({
-    queryKey: ["function", name],
-    queryFn: async (): Promise<Detail | null> => {
-      const res = await fetch(`/api/functions/${encodeURIComponent(name)}`);
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error(`detail query failed: ${res.status}`);
-      return res.json();
-    },
-  });
+export default function FunctionDetails({ id }: Props) {
+  // Both queries share the ["function", id] key prefix, so one invalidation
+  // after an invoke refreshes details and history together. The detail
+  // query is also shared (same key) with the page header.
+  const detailQuery = useQuery(functionDetailQueryOptions(id));
   const runsQuery = useQuery({
-    queryKey: ["function", name, "invocations"],
+    queryKey: ["function", id, "invocations"],
     queryFn: async (): Promise<InvocationRow[]> => {
       const res = await fetch(
-        `/api/functions/${encodeURIComponent(name)}/invocations?limit=50`,
+        `/api/functions/${encodeURIComponent(id)}/invocations?limit=50`,
       );
       if (!res.ok) throw new Error(`invocations query failed: ${res.status}`);
       return (await res.json()).invocations ?? [];
@@ -61,7 +47,7 @@ export default function FunctionDetails({ name }: Props) {
   }
   const detail = detailQuery.data;
   if (!detail) {
-    return <Panel label="Details:">No runs or deployments recorded yet.</Panel>;
+    return <Panel label="Details:">Function not found.</Panel>;
   }
   const runs = runsQuery.data ?? [];
 
@@ -74,7 +60,7 @@ export default function FunctionDetails({ name }: Props) {
 
   const rows: [string, string][] = [
     ["Last ran", detail.last_run ? fmtTime(detail.last_run) : "never"],
-    ["Created", dep ? fmtTime(dep.created_at) : "—"],
+    ["Created", fmtTime(detail.created_at)],
     ["Avg warm start, last 10", avgWarmMs !== null ? `${avgWarmMs} ms` : "—"],
     [
       "Avg cold/snapshot start, last 10",

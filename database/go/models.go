@@ -7,7 +7,7 @@ import (
 )
 
 type DeploymentsRow struct {
-	FunctionName string `json:"function_name" db:"function_name"`
+	FunctionID string `json:"function_id" db:"function_id"`
 	ImageSizeBytes int64 `json:"image_size_bytes" db:"image_size_bytes"`
 	BuildMs int64 `json:"build_ms" db:"build_ms"`
 	SnapshotEnabled bool `json:"snapshot_enabled" db:"snapshot_enabled"`
@@ -27,10 +27,11 @@ type FunctionsRow struct {
 	UserID *string `json:"user_id" db:"user_id"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	ID string `json:"id" db:"id"`
+	DeletedAt *time.Time `json:"deleted_at" db:"deleted_at"`
 }
 
 type InvocationsRow struct {
-	FunctionName string `json:"function_name" db:"function_name"`
+	FunctionID string `json:"function_id" db:"function_id"`
 	StartType string `json:"start_type" db:"start_type"`
 	QueueWaitMs int64 `json:"queue_wait_ms" db:"queue_wait_ms"`
 	BootMs int64 `json:"boot_ms" db:"boot_ms"`
