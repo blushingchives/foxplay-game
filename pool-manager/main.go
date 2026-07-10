@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -68,6 +69,10 @@ func main() {
 		resp, err := mgr.Invoke(ctx, functionName, event)
 		if err != nil {
 			log.Printf("[%s] invocation error: %v", functionName, err)
+			if errors.Is(err, ErrCodeMissing) {
+				http.Error(w, "function code is missing: no image deployed for '"+functionName+"' — deploy it first", http.StatusNotFound)
+				return
+			}
 			http.Error(w, "invocation failed", http.StatusInternalServerError)
 			return
 		}

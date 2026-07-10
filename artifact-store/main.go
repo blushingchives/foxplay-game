@@ -20,6 +20,7 @@ func main() {
 	os.MkdirAll(store.functionsDir, 0755)
 
 	http.HandleFunc("/deploy/", store.handleDeploy)
+	http.HandleFunc("/delete/", store.handleDelete)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		entries, _ := os.ReadDir(store.functionsDir)
 		var totalBytes int64

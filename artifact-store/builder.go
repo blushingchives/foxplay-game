@@ -104,6 +104,31 @@ func (s *ArtifactStore) handleDeploy(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// handleDelete removes a function's image, snapshot, and any temp files
+// from disk. Idempotent — deleting a function with no files still returns
+// 200. A warm VM of the function keeps running until the idle sweeper
+// reaps it (deleting an open file is safe on Linux); the next boot then
+// fails fast with the pool-manager's code-missing error.
+func (s *ArtifactStore) handleDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	functionName := strings.TrimPrefix(r.URL.Path, "/delete/")
+	if functionName == "" || !isValidName(functionName) {
+		http.Error(w, "invalid function name", http.StatusBadRequest)
+		return
+	}
+
+	for _, suffix := range []string{".ext4", ".snap", ".mem", ".snap.tmp", ".mem.tmp"} {
+		os.Remove(filepath.Join(s.functionsDir, functionName+suffix))
+	}
+
+	log.Printf("[%s] deleted", functionName)
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *ArtifactStore) buildAndStore(functionName string, tarball io.Reader) error {
 	tmpDir, err := os.MkdirTemp("", "deploy-"+functionName+"-")
 	if err != nil {

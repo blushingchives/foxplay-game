@@ -12,6 +12,8 @@ export default function Sidebar() {
     details = "Your functions";
   } else if (pathname === "/functions/create") {
     details = "Create a function";
+  } else if (pathname.startsWith("/functions/")) {
+    details = "Function details";
   }
   return (
     <div className="header">

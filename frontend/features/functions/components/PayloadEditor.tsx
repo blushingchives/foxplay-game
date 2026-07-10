@@ -1,13 +1,14 @@
 "use client";
 import { useMemo } from "react";
-import { DEFAULT_PAYLOAD, handleJsonKeyDown } from "@/app/functions/json";
+import { DEFAULT_PAYLOAD, handleJsonKeyDown } from "@/features/functions/lib/json";
 
 type Props = {
   value: string;
   onChange: (value: string) => void;
+  rows?: number;
 };
 
-export default function PayloadEditor({ value, onChange }: Props) {
+export default function PayloadEditor({ value, onChange, rows = 10 }: Props) {
   const error = useMemo(() => {
     try {
       JSON.parse(value);
@@ -24,7 +25,7 @@ export default function PayloadEditor({ value, onChange }: Props) {
         <button
           type="button"
           onClick={() => onChange(DEFAULT_PAYLOAD)}
-          className="text-xs text-gray-400 transition-colors duration-150 hover:text-[#f26a1f]"
+          className="text-xs text-gray-400 cursor-pointer transition-colors duration-150 hover:text-[#f26a1f]"
         >
           Reset to default
         </button>
@@ -34,7 +35,7 @@ export default function PayloadEditor({ value, onChange }: Props) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => handleJsonKeyDown(e, onChange)}
-        rows={7}
+        rows={rows}
         spellCheck={false}
         className={`border bg-white rounded px-3 py-2 font-mono text-sm resize-y transition-colors duration-150 focus:outline-none ${
           error

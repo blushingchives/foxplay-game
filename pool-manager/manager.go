@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -11,6 +12,10 @@ import (
 	"sync"
 	"time"
 )
+
+// ErrCodeMissing means the function has no deployed image on disk — e.g.
+// it was wiped or never deployed. Surfaced to callers as a 404.
+var ErrCodeMissing = errors.New("function code not deployed")
 
 type Config struct {
 	KernelPath     string
@@ -295,6 +300,13 @@ func (m *PoolManager) failWaiters(pool *Pool) {
 }
 
 func (m *PoolManager) bootVM(functionName string) (*VM, error) {
+	// Fail fast with a clear error when there is no image to boot —
+	// otherwise this surfaces as an opaque firecracker drive-config failure.
+	codeRootfs := fmt.Sprintf("%s/%s.ext4", m.config.FunctionsDir, functionName)
+	if _, err := os.Stat(codeRootfs); err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrCodeMissing, codeRootfs)
+	}
+
 	start := time.Now()
 
 	// Snapshots are created by the artifact-store at deploy time. Restore

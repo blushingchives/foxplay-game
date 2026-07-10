@@ -1,7 +1,7 @@
 "use client";
 import Form from "next/form";
 import { useState } from "react";
-import { createPost } from "@/app/servers/actions";
+import { createPost } from "@/features/servers/actions";
 
 const SERVER_TYPES: Record<string, string[]> = {
   minecraft: ["fabric"],

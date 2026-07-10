@@ -95,7 +95,8 @@ type InvocationRow struct {
 
 // Store wraps the Postgres connection. It runs in a degraded mode when no
 // DATABASE_URL is configured or the database is unreachable: Ready() stays
-// false and handlers respond 503 until the schema is in place.
+// false and handlers respond 503 until the database answers a ping.
+// Schema is owned by database/migrations, applied by dbmate in deploy.sh.
 type Store struct {
 	db    *sql.DB
 	ready atomic.Bool
@@ -113,7 +114,7 @@ func NewStore(databaseURL string) *Store {
 		return s
 	}
 	s.db = db
-	go s.ensureSchemaLoop()
+	go s.waitReadyLoop()
 	return s
 }
 
@@ -121,46 +122,11 @@ func (s *Store) Ready() bool {
 	return s.db != nil && s.ready.Load()
 }
 
-var schema = []string{
-	`CREATE TABLE IF NOT EXISTS invocations (
-		id            BIGSERIAL PRIMARY KEY,
-		function_name TEXT        NOT NULL,
-		start_type    TEXT        NOT NULL,
-		queue_wait_ms BIGINT      NOT NULL DEFAULT 0,
-		boot_ms       BIGINT      NOT NULL DEFAULT 0,
-		invoke_ms     BIGINT      NOT NULL DEFAULT 0,
-		status        INT         NOT NULL DEFAULT 0,
-		infra_error   BOOLEAN     NOT NULL DEFAULT FALSE,
-		cpu_ms        BIGINT      NOT NULL DEFAULT 0,
-		mem_peak_kb   BIGINT      NOT NULL DEFAULT 0,
-		created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-	)`,
-	`CREATE INDEX IF NOT EXISTS idx_invocations_fn_time
-		ON invocations (function_name, created_at DESC)`,
-	`CREATE TABLE IF NOT EXISTS deployments (
-		id               BIGSERIAL PRIMARY KEY,
-		function_name    TEXT        NOT NULL,
-		image_size_bytes BIGINT      NOT NULL DEFAULT 0,
-		build_ms         BIGINT      NOT NULL DEFAULT 0,
-		snapshot_enabled BOOLEAN     NOT NULL DEFAULT TRUE,
-		snapshot_ms      BIGINT      NOT NULL DEFAULT 0,
-		snapshot_ok      BOOLEAN     NOT NULL DEFAULT FALSE,
-		created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
-	)`,
-	`CREATE INDEX IF NOT EXISTS idx_deployments_fn_time
-		ON deployments (function_name, created_at DESC)`,
-	// added after initial rollout — upgrades existing tables in place
-	`ALTER TABLE invocations ADD COLUMN IF NOT EXISTS request_body TEXT NOT NULL DEFAULT ''`,
-	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS kernel_path TEXT NOT NULL DEFAULT ''`,
-	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS kernel_size_bytes BIGINT NOT NULL DEFAULT 0`,
-	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS base_rootfs_path TEXT NOT NULL DEFAULT ''`,
-	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS base_rootfs_size_bytes BIGINT NOT NULL DEFAULT 0`,
-	`ALTER TABLE deployments ADD COLUMN IF NOT EXISTS bootstrap_version TEXT NOT NULL DEFAULT ''`,
-}
-
-func (s *Store) ensureSchemaLoop() {
+// waitReadyLoop flips Ready once the database answers. DDL lives in
+// database/migrations — this service assumes the schema exists.
+func (s *Store) waitReadyLoop() {
 	for {
-		if err := s.ensureSchema(); err != nil {
+		if err := s.db.Ping(); err != nil {
 			log.Printf("database not ready: %v (retrying in 30s)", err)
 			time.Sleep(30 * time.Second)
 			continue
@@ -169,15 +135,6 @@ func (s *Store) ensureSchemaLoop() {
 		log.Println("database ready")
 		return
 	}
-}
-
-func (s *Store) ensureSchema() error {
-	for _, stmt := range schema {
-		if _, err := s.db.Exec(stmt); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *Store) InsertInvocation(ev InvocationEvent) error {

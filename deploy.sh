@@ -15,6 +15,23 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+echo "==> applying database migrations"
+if [ -z "${DATABASE_URL:-}" ] && [ -f "$REPO_DIR/metrics/.env" ]; then
+    line="$(grep -m1 '^DATABASE_URL=' "$REPO_DIR/metrics/.env" || true)"
+    [ -n "$line" ] && export "$line"
+fi
+if [ -n "${DATABASE_URL:-}" ]; then
+    if ! command -v dbmate >/dev/null 2>&1; then
+        echo "    installing dbmate"
+        curl -fsSL -o /usr/local/bin/dbmate \
+            https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64
+        chmod +x /usr/local/bin/dbmate
+    fi
+    DBMATE_MIGRATIONS_DIR="$REPO_DIR/database/migrations" DBMATE_NO_DUMP_SCHEMA=true dbmate up
+else
+    echo "    DATABASE_URL not found (metrics/.env) — skipping migrations"
+fi
+
 echo "==> building"
 for svc in "${SERVICES[@]}"; do
     cd "$REPO_DIR/$svc"

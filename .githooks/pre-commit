@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Blocks commits that touch database/ while the generated types are stale.
+# Enable once per clone:  git config core.hooksPath .githooks
+
+if git diff --cached --name-only | grep -q "^database/"; then
+    bash database/generate.sh --check
+    rc=$?
+    if [ "$rc" -eq 1 ]; then
+        echo "" >&2
+        echo "pre-commit: generated types are out of date with the database." >&2
+        echo "  fix: bash database/generate.sh   (then stage the result)" >&2
+        exit 1
+    elif [ "$rc" -eq 2 ]; then
+        echo "pre-commit: database unreachable — skipping codegen check" >&2
+    fi
+fi
+exit 0

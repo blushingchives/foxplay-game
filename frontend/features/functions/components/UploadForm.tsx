@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { toast } from "@/app/components/Toast";
-import FileDropzone from "@/app/functions/FileDropzone";
+import { toast } from "@/components/Toast";
+import FileDropzone from "@/features/functions/components/FileDropzone";
+import { uploadFormSchema } from "@/lib/models";
 
 type Props = {
   onDeployed: (name: string) => void;
@@ -10,6 +11,7 @@ type Props = {
 export default function UploadForm({ onDeployed }: Props) {
   const [name, setName] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [snapshot, setSnapshot] = useState(true);
   const [uploading, setUploading] = useState(false);
 
   function selectFile(f: File | undefined) {
@@ -25,20 +27,25 @@ export default function UploadForm({ onDeployed }: Props) {
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    const functionName = name.trim();
-    if (!functionName || !file) return;
-    if (!/^[a-z0-9-]{1,64}$/.test(functionName)) {
-      toast.error("Invalid name", {
-        description: "Use lowercase letters, digits, and hyphens only",
+    const parsed = uploadFormSchema.safeParse({
+      name: name.trim(),
+      file,
+      snapshot,
+    });
+    if (!parsed.success) {
+      toast.error("Invalid input", {
+        description: parsed.error.issues[0].message,
       });
       return;
     }
+    const { name: functionName, file: codeFile } = parsed.data;
 
     setUploading(true);
     const start = performance.now();
     try {
       const formData = new FormData();
-      formData.append("code", file);
+      formData.append("code", codeFile);
+      formData.append("snapshot", String(parsed.data.snapshot));
       const res = await fetch(`/api/artifact-store/deploy/${functionName}`, {
         method: "POST",
         body: formData,
@@ -82,10 +89,25 @@ export default function UploadForm({ onDeployed }: Props) {
       />
       <label htmlFor="code">Code (.tar.gz):</label>
       <FileDropzone file={file} onSelect={selectFile} />
+      <label className="flex items-start gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={snapshot}
+          onChange={(e) => setSnapshot(e.target.checked)}
+          className="mt-1 accent-[#f26a1f]"
+        />
+        <span>
+          Create startup snapshot
+          <span className="block text-xs text-gray-400">
+            Boots the function once at deploy so later cold starts resume in
+            under a second. Costs ~256 MB disk and a few extra seconds now.
+          </span>
+        </span>
+      </label>
       <button
         type="submit"
         disabled={uploading}
-        className="bg-[#f26a1f] text-white font-bold rounded px-4 py-2 transition-colors duration-150 hover:bg-[#d95a15] disabled:opacity-50"
+        className="bg-[#f26a1f] text-white font-bold rounded px-4 py-2 cursor-pointer transition-colors duration-150 hover:bg-[#d95a15] disabled:opacity-50 disabled:cursor-default"
       >
         {uploading ? "Uploading..." : "Upload"}
       </button>
