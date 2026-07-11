@@ -1,7 +1,22 @@
 "use client";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { InvocationRow } from "@/lib/models";
 import { functionDetailQueryOptions } from "@/features/functions/lib/api";
+
+const PAGE_SIZE = 10;
+
+async function fetchInvocations(
+  id: string,
+  limit: number,
+  offset: number,
+): Promise<InvocationRow[]> {
+  const res = await fetch(
+    `/api/functions/${encodeURIComponent(id)}/invocations?limit=${limit}&offset=${offset}`,
+  );
+  if (!res.ok) throw new Error(`invocations query failed: ${res.status}`);
+  return (await res.json()).invocations ?? [];
+}
 
 function fmtBytes(n: number) {
   if (n <= 0) return "—";
@@ -24,39 +39,43 @@ type Props = {
 };
 
 export default function FunctionDetails({ id }: Props) {
-  // Both queries share the ["function", id] key prefix, so one invalidation
-  // after an invoke refreshes details and history together. The detail
-  // query is also shared (same key) with the page header.
+  const [page, setPage] = useState(0);
+
+  // All queries share the ["function", id] key prefix, so one invalidation
+  // after an invoke refreshes details, stats, and history together. The
+  // detail query is also shared (same key) with the page header.
   const detailQuery = useQuery(functionDetailQueryOptions(id));
-  const runsQuery = useQuery({
-    queryKey: ["function", id, "invocations"],
-    queryFn: async (): Promise<InvocationRow[]> => {
-      const res = await fetch(
-        `/api/functions/${encodeURIComponent(id)}/invocations?limit=50`,
-      );
-      if (!res.ok) throw new Error(`invocations query failed: ${res.status}`);
-      return (await res.json()).invocations ?? [];
-    },
+  // recent runs for the "last 10" averages, independent of the table page
+  const statsQuery = useQuery({
+    queryKey: ["function", id, "invocations", "stats"],
+    queryFn: () => fetchInvocations(id, 50, 0),
+  });
+  const pageQuery = useQuery({
+    queryKey: ["function", id, "invocations", page],
+    queryFn: () => fetchInvocations(id, PAGE_SIZE, page * PAGE_SIZE),
+    placeholderData: keepPreviousData, // show current rows while the next page loads
   });
 
-  if (detailQuery.isPending || runsQuery.isPending) {
+  if (detailQuery.isPending || statsQuery.isPending || pageQuery.isPending) {
     return <Panel label="Details:">Loading…</Panel>;
   }
-  if (detailQuery.isError || runsQuery.isError) {
+  if (detailQuery.isError || statsQuery.isError || pageQuery.isError) {
     return <Panel label="Details:">Failed to load metrics.</Panel>;
   }
   const detail = detailQuery.data;
   if (!detail) {
     return <Panel label="Details:">Function not found.</Panel>;
   }
-  const runs = runsQuery.data ?? [];
+  const stats = statsQuery.data ?? [];
+  const runs = pageQuery.data ?? [];
+  const totalPages = Math.max(1, Math.ceil(detail.runs / PAGE_SIZE));
 
   const dep = detail.last_deployment;
-  const warm10 = runs.filter((r) => r.start_type === "warm").slice(0, 10);
-  const boot10 = runs.filter((r) => r.start_type !== "warm").slice(0, 10);
+  const warm10 = stats.filter((r) => r.start_type === "warm").slice(0, 10);
+  const boot10 = stats.filter((r) => r.start_type !== "warm").slice(0, 10);
   const avgWarmMs = avg(warm10.map((r) => r.invoke_ms));
   const avgBootMs = avg(boot10.map((r) => r.boot_ms + r.invoke_ms));
-  const avgMemKB = avg(runs.slice(0, 10).map((r) => r.mem_peak_kb));
+  const avgMemKB = avg(stats.slice(0, 10).map((r) => r.mem_peak_kb));
 
   const rows: [string, string][] = [
     ["Last ran", detail.last_run ? fmtTime(detail.last_run) : "never"],
@@ -111,13 +130,17 @@ export default function FunctionDetails({ id }: Props) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <label>History (last 10 runs):</label>
+        <label>History:</label>
         {runs.length === 0 ? (
           <div className="text-sm text-gray-500 bg-white border border-[#efefea] rounded px-4 py-3">
             No runs yet.
           </div>
         ) : (
-          <div className="text-sm bg-white border border-[#efefea] rounded overflow-x-auto">
+          <div
+            className={`text-sm bg-white border border-[#efefea] rounded overflow-x-auto transition-opacity duration-150 ${
+              pageQuery.isFetching ? "opacity-60" : ""
+            }`}
+          >
             <table className="w-full">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-[#efefea]">
@@ -129,7 +152,7 @@ export default function FunctionDetails({ id }: Props) {
                 </tr>
               </thead>
               <tbody className="font-mono">
-                {runs.slice(0, 10).map((r, idx) => (
+                {runs.map((r, idx) => (
                   <tr
                     key={`${r.created_at}-${idx}`}
                     className="border-b border-[#efefea] last:border-b-0"
@@ -157,6 +180,29 @@ export default function FunctionDetails({ id }: Props) {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end gap-3 text-sm">
+            <button
+              type="button"
+              onClick={() => setPage((p) => p - 1)}
+              disabled={page === 0}
+              className="text-gray-500 cursor-pointer transition-colors duration-150 hover:text-[#f26a1f] disabled:opacity-40 disabled:cursor-default disabled:hover:text-gray-500"
+            >
+              ← Prev
+            </button>
+            <span className="text-gray-500">
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={page + 1 >= totalPages}
+              className="text-gray-500 cursor-pointer transition-colors duration-150 hover:text-[#f26a1f] disabled:opacity-40 disabled:cursor-default disabled:hover:text-gray-500"
+            >
+              Next →
+            </button>
           </div>
         )}
       </div>

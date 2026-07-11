@@ -10,9 +10,12 @@ export async function GET(
   if (!functionIdSchema.safeParse(id).success) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
-  let limit = Number(new URL(req.url).searchParams.get("limit") ?? 50);
+  const search = new URL(req.url).searchParams;
+  let limit = Number(search.get("limit") ?? 50);
   if (!Number.isFinite(limit) || limit <= 0) limit = 50;
   if (limit > 500) limit = 500;
+  let offset = Number(search.get("offset") ?? 0);
+  if (!Number.isFinite(offset) || offset < 0) offset = 0;
 
   try {
     const res = await db.query(
@@ -21,8 +24,8 @@ export async function GET(
               status, infra_error, cpu_ms::int AS cpu_ms,
               mem_peak_kb::int AS mem_peak_kb, request_body, created_at
        FROM invocations WHERE function_id = $1
-       ORDER BY created_at DESC LIMIT $2`,
-      [id, limit],
+       ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [id, limit, offset],
     );
     return NextResponse.json({ invocations: res.rows });
   } catch (err) {

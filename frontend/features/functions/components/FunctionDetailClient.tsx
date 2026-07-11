@@ -99,7 +99,7 @@ export default function FunctionDetailClient({ id }: Props) {
   }
 
   return (
-    <div className="p-6 max-w-xl flex flex-col gap-8">
+    <div className="p-6 max-w-6xl flex flex-col gap-8">
       <div className="flex flex-col gap-2">
         <Link
           href="/functions"
@@ -140,18 +140,24 @@ export default function FunctionDetailClient({ id }: Props) {
         </div>
       </div>
 
-      <FunctionDetails id={id} />
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
+        {/* left: details + history */}
+        <div className="flex-1 w-full min-w-0 flex flex-col gap-8">
+          <FunctionDetails id={id} />
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <PayloadEditor value={payload} onChange={setPayload} />
-        <button
-          type="button"
-          onClick={invoke}
-          disabled={invoking}
-          className="bg-[#f26a1f] text-white font-bold rounded px-4 py-2 cursor-pointer transition-colors duration-150 hover:bg-[#d95a15] disabled:opacity-50 disabled:cursor-default"
-        >
-          {invoking ? "Invoking..." : "Invoke"}
-        </button>
+        {/* right: test-request panel, docs style — sticks while scrolling */}
+        <div className="w-full lg:w-[420px] lg:shrink-0 lg:sticky lg:top-6 flex flex-col gap-2">
+          <PayloadEditor value={payload} onChange={setPayload} />
+          <button
+            type="button"
+            onClick={invoke}
+            disabled={invoking}
+            className="bg-[#f26a1f] text-white font-bold rounded px-4 py-2 cursor-pointer transition-colors duration-150 hover:bg-[#d95a15] disabled:opacity-50 disabled:cursor-default"
+          >
+            {invoking ? "Invoking..." : "Invoke"}
+          </button>
+        </div>
       </div>
     </div>
   );
