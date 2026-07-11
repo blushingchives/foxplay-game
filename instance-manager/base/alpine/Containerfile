@@ -1,8 +1,9 @@
 FROM alpine:latest
 
-RUN apk add --no-cache dropbear openssh-keygen busybox-extras iproute2
-
-COPY init /sbin/init
-RUN chmod +x /sbin/init \
-    && mkdir -p /root/.ssh \
+# Single RUN (root's password cleared so key-based SSH isn't blocked by a
+# locked account). /root/.ssh is created on the host at key-injection time.
+RUN apk add --no-cache dropbear openssh-keygen busybox-extras iproute2 \
     && passwd -d root
+
+# --chmod sets the exec bit at copy time (no separate chmod RUN needed).
+COPY --chmod=0755 init /sbin/init

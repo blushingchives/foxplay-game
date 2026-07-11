@@ -1,2 +1,4 @@
 *.sh -text
 .githooks/* -text
+# VM guest init scripts must stay LF — a CRLF shebang breaks boot
+instance-manager/base/*/init -text
