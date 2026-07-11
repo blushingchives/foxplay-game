@@ -69,6 +69,31 @@ func main() {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
+	http.HandleFunc("/events/instance", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !requireDB(w, store) {
+			return
+		}
+		var ev InstanceMetricEvent
+		if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
+			http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if ev.InstanceID == "" {
+			http.Error(w, "instance_id is required", http.StatusBadRequest)
+			return
+		}
+		if err := store.InsertInstanceMetric(ev); err != nil {
+			log.Printf("insert instance metric: %v", err)
+			http.Error(w, "insert failed", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	http.HandleFunc("/functions", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

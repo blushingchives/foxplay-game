@@ -1,0 +1,8 @@
+FROM alpine:latest
+
+RUN apk add --no-cache dropbear openssh-keygen busybox-extras iproute2
+
+COPY init /sbin/init
+RUN chmod +x /sbin/init \
+    && mkdir -p /root/.ssh \
+    && passwd -d root

@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Builds the three Go services (metrics, artifact-store, pool-manager),
-# installs/updates their systemd units, and (re)starts them.
+# Builds the Go services, installs/updates their systemd units, and
+# (re)starts them.
 #
 # Run on the server as root:  bash deploy.sh
+#
+# Note: instance base images are built separately and occasionally, not here:
+#   bash instance-manager/build-base.sh alpine
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Order matters: metrics first so no events are dropped, pool-manager last
 # (its startup cleanup pkills stale firecracker processes).
-SERVICES=(metrics artifact-store pool-manager)
+SERVICES=(metrics artifact-store instance-manager pool-manager)
 
 if [[ $EUID -ne 0 ]]; then
     echo "error: run as root (needed for systemd and firecracker)" >&2
@@ -45,6 +48,11 @@ done
 
 echo "==> installing systemd units"
 for svc in "${SERVICES[@]}"; do
+    # KillMode=process keeps the instance-manager's long-lived VMs alive
+    # across a manager restart (it re-adopts them on startup). The default
+    # (control-group) would kill the child firecracker processes.
+    kill_mode="control-group"
+    [ "$svc" = "instance-manager" ] && kill_mode="process"
     cat > "/etc/systemd/system/foxplay-$svc.service" <<EOF
 [Unit]
 Description=Foxplay $svc
@@ -54,6 +62,7 @@ After=network.target
 WorkingDirectory=$REPO_DIR/$svc
 ExecStart=$REPO_DIR/$svc/$svc
 EnvironmentFile=-$REPO_DIR/$svc/.env
+KillMode=$kill_mode
 Restart=on-failure
 RestartSec=3
 

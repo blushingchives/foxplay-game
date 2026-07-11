@@ -30,6 +30,29 @@ type FunctionsRow struct {
 	DeletedAt *time.Time `json:"deleted_at" db:"deleted_at"`
 }
 
+type InstanceMetricsRow struct {
+	ID string `json:"id" db:"id"`
+	InstanceID string `json:"instance_id" db:"instance_id"`
+	CpuPct int `json:"cpu_pct" db:"cpu_pct"`
+	MemRssKb int64 `json:"mem_rss_kb" db:"mem_rss_kb"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+type InstancesRow struct {
+	ID string `json:"id" db:"id"`
+	Name string `json:"name" db:"name"`
+	UserID *string `json:"user_id" db:"user_id"`
+	State string `json:"state" db:"state"`
+	BaseImage string `json:"base_image" db:"base_image"`
+	Vcpu int `json:"vcpu" db:"vcpu"`
+	MemMib int `json:"mem_mib" db:"mem_mib"`
+	GuestIp *string `json:"guest_ip" db:"guest_ip"`
+	SshHostPort *int `json:"ssh_host_port" db:"ssh_host_port"`
+	SshPublicKey *string `json:"ssh_public_key" db:"ssh_public_key"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	DeletedAt *time.Time `json:"deleted_at" db:"deleted_at"`
+}
+
 type InvocationsRow struct {
 	FunctionID string `json:"function_id" db:"function_id"`
 	StartType string `json:"start_type" db:"start_type"`

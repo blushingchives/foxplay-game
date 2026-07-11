@@ -26,6 +26,14 @@ const prefixedIdSchema = (prefix: string) =>
 export const functionIdSchema = prefixedIdSchema("fn");
 export const deploymentIdSchema = prefixedIdSchema("art");
 export const invocationIdSchema = prefixedIdSchema("log");
+export const instanceIdSchema = prefixedIdSchema("srv");
+
+export const sshPublicKeySchema = z
+  .string()
+  .regex(
+    /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-\S+) [A-Za-z0-9+/=]+/,
+    "Paste a valid SSH public key (starts with ssh-ed25519, ssh-rsa, …)",
+  );
 
 // ---- users ----
 export const userSchema = z.object({
@@ -44,6 +52,42 @@ export const functionRowSchema = z.object({
   deleted_at: z.string().nullable(), // soft delete — history stays attributable
 });
 export type FunctionRow = z.infer<typeof functionRowSchema>;
+
+// ---- instances (long-lived SSH-able VMs) ----
+export const instanceStateSchema = z.enum([
+  "creating",
+  "running",
+  "stopped",
+  "error",
+]);
+export type InstanceState = z.infer<typeof instanceStateSchema>;
+
+export const instanceRowSchema = z.object({
+  id: instanceIdSchema,
+  name: functionNameSchema,
+  user_id: z.string().nullable(),
+  state: z.string(),
+  base_image: z.string(),
+  vcpu: z.number(),
+  mem_mib: z.number(),
+  guest_ip: z.string().nullable(),
+  ssh_host_port: z.number().nullable(),
+  ssh_public_key: z.string().nullable(),
+  created_at: z.string(),
+  deleted_at: z.string().nullable(),
+});
+export type InstanceRow = z.infer<typeof instanceRowSchema>;
+
+// create form: a display name, base image, and the SSH key to inject
+export const instanceCreateSchema = z.object({
+  name: functionNameSchema,
+  base_image: z
+    .string()
+    .regex(/^[a-z0-9-]{1,32}$/, "invalid image")
+    .default("alpine"),
+  ssh_public_key: sshPublicKeySchema,
+});
+export type InstanceCreate = z.infer<typeof instanceCreateSchema>;
 
 // ---- invocations ----
 export const startTypeSchema = z.enum(["cold", "restored", "warm"]);

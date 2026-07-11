@@ -14,12 +14,23 @@ import (
 )
 
 func cleanupStaleVMs() {
-	exec.Command("pkill", "-f", "firecracker --api-sock").Run()
+	// Only touch this service's own VMs. The instance-manager runs long-lived
+	// VMs with an "fc-inst-" socket prefix — a blanket pkill would kill those
+	// (and its running instances) too.
 	matches, _ := filepath.Glob("/tmp/fc-*")
+	n := 0
 	for _, f := range matches {
+		if strings.Contains(f, "fc-inst-") {
+			continue // belongs to the instance-manager
+		}
+		// kill the firecracker bound to this api socket, if any
+		if strings.HasSuffix(f, ".sock") && !strings.Contains(f, "vsock") {
+			exec.Command("pkill", "-f", "firecracker --api-sock "+f).Run()
+		}
 		os.Remove(f)
+		n++
 	}
-	log.Printf("cleaned up %d stale VM files", len(matches))
+	log.Printf("cleaned up %d stale VM files", n)
 }
 
 func main() {

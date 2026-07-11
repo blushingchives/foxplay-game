@@ -37,6 +37,12 @@ type DeploymentEvent struct {
 	BootstrapVersion    string `json:"bootstrap_version"`
 }
 
+type InstanceMetricEvent struct {
+	InstanceID string `json:"instance_id"`
+	CPUPct     int    `json:"cpu_pct"`
+	MemRSSKB   int64  `json:"mem_rss_kb"`
+}
+
 type FunctionSummary struct {
 	Name           string     `json:"name"`
 	Runs           int64      `json:"runs"`
@@ -143,6 +149,13 @@ func (s *Store) InsertInvocation(ev InvocationEvent) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		ev.Function, ev.StartType, ev.QueueWaitMs, ev.BootMs, ev.InvokeMs,
 		ev.Status, ev.InfraError, ev.CPUMs, ev.MemPeakKB, ev.RequestBody)
+	return err
+}
+
+func (s *Store) InsertInstanceMetric(ev InstanceMetricEvent) error {
+	_, err := s.db.Exec(
+		`INSERT INTO instance_metrics (instance_id, cpu_pct, mem_rss_kb) VALUES ($1, $2, $3)`,
+		ev.InstanceID, ev.CPUPct, ev.MemRSSKB)
 	return err
 }
 

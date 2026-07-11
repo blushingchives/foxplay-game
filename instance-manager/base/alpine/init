@@ -1,0 +1,27 @@
+#!/bin/sh
+# Minimal init for a generic Alpine instance. Networking is configured by
+# the kernel `ip=` boot arg (no userspace setup needed); this brings up the
+# essentials and starts an SSH daemon. The root disk is writable and
+# persistent, so first-boot host key generation survives reboots.
+set -x
+
+mount -t proc     proc     /proc
+mount -t sysfs    sysfs    /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
+mkdir -p /dev/pts && mount -t devpts devpts /dev/pts
+
+# loopback (the kernel ip= arg handles eth0)
+ip link set lo up 2>/dev/null
+
+# host keys — generated once, then persisted on the writable disk
+mkdir -p /etc/dropbear
+for t in rsa ed25519; do
+    f="/etc/dropbear/dropbear_${t}_host_key"
+    [ -f "$f" ] || dropbearkey -t "$t" -f "$f" 2>/dev/null
+done
+
+# SSH daemon: -R generate keys if missing, -E log to stderr, foreground child
+/usr/sbin/dropbear -R -E -p 22
+
+# keep PID 1 alive; a console shell is handy for debugging via ttyS0
+exec /bin/sh

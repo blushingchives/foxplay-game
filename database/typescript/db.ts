@@ -26,6 +26,29 @@ export interface FunctionsRow {
   deleted_at: string | null;
 }
 
+export interface InstanceMetricsRow {
+  id: string;
+  instance_id: string;
+  cpu_pct: number;
+  mem_rss_kb: number;
+  created_at: string;
+}
+
+export interface InstancesRow {
+  id: string;
+  name: string;
+  user_id: string | null;
+  state: string;
+  base_image: string;
+  vcpu: number;
+  mem_mib: number;
+  guest_ip: string | null;
+  ssh_host_port: number | null;
+  ssh_public_key: string | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
 export interface InvocationsRow {
   function_id: string;
   start_type: string;

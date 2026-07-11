@@ -5,3 +5,7 @@
 pool-manager/pool-manager
 artifact-store/artifact-store
 metrics/metrics
+instance-manager/instance-manager
+
+# built VM bootstrap binary
+instance-manager/base/*/init.bin

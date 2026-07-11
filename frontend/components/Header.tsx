@@ -6,6 +6,10 @@ export default function Sidebar() {
   let details = "";
   if (pathname === "/servers") {
     details = "Your servers";
+  } else if (pathname === "/servers/create") {
+    details = "Create a server";
+  } else if (pathname.startsWith("/servers/")) {
+    details = "Server details";
   } else if (pathname === "/friends") {
     details = "Your friends";
   } else if (pathname === "/functions") {

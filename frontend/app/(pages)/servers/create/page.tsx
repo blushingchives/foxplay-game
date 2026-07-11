@@ -1,13 +1,11 @@
 import Header from "@/components/Header";
-import CreateServerForm from "@/features/servers/components/CreateServerForm";
+import CreateInstanceClient from "@/features/servers/components/CreateInstanceClient";
 
-export default function Create() {
+export default function CreateServer() {
   return (
     <>
       <Header />
-      <div>
-        <CreateServerForm />
-      </div>
+      <CreateInstanceClient />
     </>
   );
 }
