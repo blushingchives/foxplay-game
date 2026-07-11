@@ -78,7 +78,7 @@ func fcPut(socketPath, path string, body any) error {
 func configureInstance(socketPath string, cfg instanceBoot) error {
 	bootArgs := fmt.Sprintf(
 		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw "+
-			"ip=%s::%s:%s::eth0:off init=/sbin/init",
+			"ip=%s::%s:%s::eth0:off init=/sbin/foxinit",
 		cfg.GuestIP, cfg.GatewayIP, cfg.Netmask,
 	)
 	if err := fcPut(socketPath, "/boot-source", map[string]any{

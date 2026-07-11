@@ -5,5 +5,8 @@ FROM alpine:latest
 RUN apk add --no-cache dropbear openssh-keygen busybox-extras iproute2 \
     && passwd -d root
 
+# Use a custom path, NOT /sbin/init: busybox ships /sbin/init as a symlink to
+# /bin/busybox, and COPYing over it clobbers busybox — creating a shebang
+# loop (script → /bin/sh → busybox = script → …) that panics init with ELOOP.
 # --chmod sets the exec bit at copy time (no separate chmod RUN needed).
-COPY --chmod=0755 init /sbin/init
+COPY --chmod=0755 init /sbin/foxinit
