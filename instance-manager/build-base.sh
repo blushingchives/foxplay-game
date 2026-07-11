@@ -16,7 +16,9 @@ out="$BASE_IMAGES_DIR/$name.ext4"
 size_mb="${SIZE_MB:-512}"
 
 echo "==> building container image foxplay-base-$name"
-docker build -t "foxplay-base-$name" "$dir"
+# docker only auto-detects "Dockerfile"; ours is a Containerfile (repo
+# convention, e.g. fabric/), so point at it explicitly.
+docker build -t "foxplay-base-$name" -f "$dir/Containerfile" "$dir"
 
 echo "==> exporting rootfs"
 cid="$(docker create "foxplay-base-$name")"
