@@ -1,18 +1,31 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
 import { useInstances } from "@/features/servers/hooks/useInstances";
-import { instanceCreateSchema } from "@/lib/models";
+import { useSshKeys } from "@/features/ssh-keys/hooks/useSshKeys";
+import { instanceCreateSchema, sshKeyCreateSchema } from "@/lib/models";
+
+const NEW_KEY = "__new__";
 
 export default function CreateInstanceClient() {
   const router = useRouter();
   const { create } = useInstances();
+  const { keys, create: createKey } = useSshKeys();
+
   const [name, setName] = useState("");
   const [image, setImage] = useState("alpine");
-  const [sshKey, setSshKey] = useState("");
+  const [keyChoice, setKeyChoice] = useState(NEW_KEY);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyText, setNewKeyText] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // Default to the first saved key once keys load, if the user hasn't chosen.
+  useEffect(() => {
+    if (keyChoice === NEW_KEY && keys.length > 0) setKeyChoice(keys[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keys.length]);
 
   const imagesQuery = useQuery({
     queryKey: ["images"],
@@ -24,23 +37,56 @@ export default function CreateInstanceClient() {
   });
   const images = imagesQuery.data ?? ["alpine"];
 
+  // Resolve the public key to inject: a saved key, or a new one we save now.
+  async function resolvePublicKey(): Promise<string | null> {
+    if (keyChoice === NEW_KEY) {
+      const parsed = sshKeyCreateSchema.safeParse({
+        name: newKeyName.trim(),
+        public_key: newKeyText.trim(),
+      });
+      if (!parsed.success) {
+        toast.error("Invalid key", {
+          description: parsed.error.issues[0].message,
+        });
+        return null;
+      }
+      try {
+        const saved = await createKey(parsed.data);
+        return saved.public_key;
+      } catch (err) {
+        toast.error("Saving key failed", {
+          description: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      }
+    }
+    const chosen = keys.find((k) => k.id === keyChoice);
+    if (!chosen) {
+      toast.error("Select an SSH key");
+      return null;
+    }
+    return chosen.public_key;
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    const parsed = instanceCreateSchema.safeParse({
-      name: name.trim(),
-      base_image: image,
-      ssh_public_key: sshKey.trim(),
-    });
-    if (!parsed.success) {
-      toast.error("Invalid input", {
-        description: parsed.error.issues[0].message,
-      });
-      return;
-    }
-
     setCreating(true);
     const start = performance.now();
     try {
+      const publicKey = await resolvePublicKey();
+      if (!publicKey) return;
+
+      const parsed = instanceCreateSchema.safeParse({
+        name: name.trim(),
+        base_image: image,
+        ssh_public_key: publicKey,
+      });
+      if (!parsed.success) {
+        toast.error("Invalid input", {
+          description: parsed.error.issues[0].message,
+        });
+        return;
+      }
       await create(parsed.data);
       toast.success("Server created", {
         description: `${parsed.data.name} is booting`,
@@ -83,16 +129,47 @@ export default function CreateInstanceClient() {
             </option>
           ))}
         </select>
-        <label htmlFor="sshKey">SSH public key:</label>
-        <textarea
+
+        <label htmlFor="sshKey">SSH key:</label>
+        <select
           id="sshKey"
-          value={sshKey}
-          onChange={(e) => setSshKey(e.target.value)}
-          placeholder="ssh-ed25519 AAAA… you@host"
-          rows={4}
-          spellCheck={false}
-          className="border border-[#efefea] bg-white rounded px-3 py-2 font-mono text-sm resize-y"
-        />
+          value={keyChoice}
+          onChange={(e) => setKeyChoice(e.target.value)}
+          className="border border-[#efefea] bg-white rounded px-3 py-2"
+        >
+          {keys.map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.name}
+            </option>
+          ))}
+          <option value={NEW_KEY}>+ Add a new key…</option>
+        </select>
+
+        {keyChoice === NEW_KEY && (
+          <div className="flex flex-col gap-3 border border-[#efefea] rounded p-3 bg-white">
+            <input
+              type="text"
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.target.value)}
+              placeholder="key name, e.g. my-laptop"
+              autoComplete="off"
+              className="border border-[#efefea] bg-white rounded px-3 py-2"
+            />
+            <textarea
+              value={newKeyText}
+              onChange={(e) => setNewKeyText(e.target.value)}
+              placeholder="ssh-ed25519 AAAA… you@host"
+              rows={3}
+              spellCheck={false}
+              className="border border-[#efefea] bg-white rounded px-3 py-2 font-mono text-sm resize-y"
+            />
+            <p className="text-xs text-gray-400">
+              This key is saved to your SSH Keys and reusable for future
+              servers.
+            </p>
+          </div>
+        )}
+
         <p className="text-xs text-gray-400">
           A generic Alpine machine (1 vCPU, 128 MB). Your key is injected as
           root; connect with{" "}

@@ -76,10 +76,13 @@ func fcPut(socketPath, path string, body any) error {
 // and a static guest IP handed to the kernel via the ip= boot arg (so no
 // userspace network config is needed inside the guest).
 func configureInstance(socketPath string, cfg instanceBoot) error {
+	// ip=<client>::<gw>:<netmask>:<hostname>:<device>:<autoconf> — the
+	// hostname field carries the instance id so the guest names itself after
+	// it (foxinit re-asserts it in case the kernel value doesn't stick).
 	bootArgs := fmt.Sprintf(
 		"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw "+
-			"ip=%s::%s:%s::eth0:off init=/sbin/foxinit",
-		cfg.GuestIP, cfg.GatewayIP, cfg.Netmask,
+			"ip=%s::%s:%s:%s:eth0:off init=/sbin/foxinit",
+		cfg.GuestIP, cfg.GatewayIP, cfg.Netmask, cfg.Hostname,
 	)
 	if err := fcPut(socketPath, "/boot-source", map[string]any{
 		"kernel_image_path": cfg.KernelPath,

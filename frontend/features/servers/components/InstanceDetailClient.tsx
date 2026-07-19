@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
 import { shortId } from "@/lib/id";
 import StateBadge from "@/features/servers/components/StateBadge";
@@ -16,11 +16,19 @@ type Props = {
 };
 
 type Sample = { cpu_pct: number; mem_rss_kb: number; created_at: string };
+type MetricsPage = {
+  samples: Sample[];
+  total: number;
+  avg_1h: { cpu_pct: number | null; mem_rss_kb: number | null };
+};
+
+const PAGE_SIZE = 10;
 
 export default function InstanceDetailClient({ id }: Props) {
   const router = useRouter();
   const { start, stop, remove } = useInstances();
   const [busy, setBusy] = useState<null | "start" | "stop" | "delete">(null);
+  const [page, setPage] = useState(0);
 
   // Poll while the page is open so state + usage stay live.
   const detailQuery = useQuery({
@@ -31,19 +39,25 @@ export default function InstanceDetailClient({ id }: Props) {
   const running = inst?.state === "running";
 
   const metricsQuery = useQuery({
-    queryKey: ["instance", id, "metrics"],
-    queryFn: async (): Promise<Sample[]> => {
+    queryKey: ["instance", id, "metrics", page],
+    queryFn: async (): Promise<MetricsPage> => {
       const res = await fetch(
-        `/api/instances/${encodeURIComponent(id)}/metrics?limit=20`,
+        `/api/instances/${encodeURIComponent(id)}/metrics?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`,
       );
       if (!res.ok) throw new Error(`metrics query failed: ${res.status}`);
-      return (await res.json()).samples ?? [];
+      return res.json();
     },
-    refetchInterval: running ? 5000 : false,
+    placeholderData: keepPreviousData,
+    // live-refresh only on the first page — later pages would shift rows
+    refetchInterval: running && page === 0 ? 5000 : false,
     enabled: !!inst,
   });
-  const samples = metricsQuery.data ?? [];
-  const latest = samples[0];
+  const samples = metricsQuery.data?.samples ?? [];
+  const avg1h = metricsQuery.data?.avg_1h;
+  const totalPages = Math.max(
+    1,
+    Math.ceil((metricsQuery.data?.total ?? 0) / PAGE_SIZE),
+  );
 
   async function act(
     kind: "start" | "stop" | "delete",
@@ -84,12 +98,14 @@ export default function InstanceDetailClient({ id }: Props) {
         : "—",
     ],
     [
-      "CPU (now)",
-      running && latest ? `${latest.cpu_pct}% of a core` : "—",
+      "CPU (avg last hour)",
+      avg1h?.cpu_pct != null ? `${avg1h.cpu_pct}% of a core` : "—",
     ],
     [
-      "Memory (now)",
-      running && latest ? `${(latest.mem_rss_kb / 1024).toFixed(1)} MB` : "—",
+      "Memory (avg last hour)",
+      avg1h?.mem_rss_kb != null
+        ? `${(avg1h.mem_rss_kb / 1024).toFixed(1)} MB`
+        : "—",
     ],
     ["Created", new Date(inst.created_at).toLocaleString()],
   ];
@@ -180,13 +196,17 @@ export default function InstanceDetailClient({ id }: Props) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <label>Usage (recent samples):</label>
+        <label>Usage:</label>
         {samples.length === 0 ? (
           <div className="text-sm text-gray-500 bg-white border border-[#efefea] rounded px-4 py-3">
             {running ? "Waiting for the first sample…" : "No samples."}
           </div>
         ) : (
-          <div className="text-sm bg-white border border-[#efefea] rounded overflow-x-auto">
+          <div
+            className={`text-sm bg-white border border-[#efefea] rounded overflow-x-auto transition-opacity duration-150 ${
+              metricsQuery.isFetching ? "opacity-60" : ""
+            }`}
+          >
             <table className="w-full font-mono">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-[#efefea]">
@@ -202,7 +222,7 @@ export default function InstanceDetailClient({ id }: Props) {
                     className="border-b border-[#efefea] last:border-b-0"
                   >
                     <td className="px-4 py-2 whitespace-nowrap">
-                      {new Date(s.created_at).toLocaleTimeString()}
+                      {new Date(s.created_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-2 text-right">{s.cpu_pct}%</td>
                     <td className="px-4 py-2 text-right">
@@ -212,6 +232,29 @@ export default function InstanceDetailClient({ id }: Props) {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end gap-3 text-sm">
+            <button
+              type="button"
+              onClick={() => setPage((p) => p - 1)}
+              disabled={page === 0}
+              className="text-gray-500 cursor-pointer transition-colors duration-150 hover:text-[#f26a1f] disabled:opacity-40 disabled:cursor-default disabled:hover:text-gray-500"
+            >
+              ← Prev
+            </button>
+            <span className="text-gray-500">
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={page + 1 >= totalPages}
+              className="text-gray-500 cursor-pointer transition-colors duration-150 hover:text-[#f26a1f] disabled:opacity-40 disabled:cursor-default disabled:hover:text-gray-500"
+            >
+              Next →
+            </button>
           </div>
         )}
       </div>

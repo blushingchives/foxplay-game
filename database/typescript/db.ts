@@ -64,6 +64,15 @@ export interface InvocationsRow {
   id: string;
 }
 
+export interface SshKeysRow {
+  id: string;
+  name: string;
+  public_key: string;
+  user_id: string | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
 export interface UsersRow {
   id: string;
   email: string | null;

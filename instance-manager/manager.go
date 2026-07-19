@@ -40,6 +40,7 @@ type instanceBoot struct {
 	GuestIP    string
 	GatewayIP  string
 	Netmask    string
+	Hostname   string
 	VCPU       int
 	MemMiB     int
 }
@@ -202,6 +203,7 @@ func (m *Manager) Start(spec InstanceSpec) error {
 		GuestIP:    spec.GuestIP,
 		GatewayIP:  m.cfg.GatewayIP,
 		Netmask:    m.cfg.Netmask,
+		Hostname:   spec.ID,
 		VCPU:       spec.VCPU,
 		MemMiB:     spec.MemMiB,
 	}

@@ -27,6 +27,7 @@ export const functionIdSchema = prefixedIdSchema("fn");
 export const deploymentIdSchema = prefixedIdSchema("art");
 export const invocationIdSchema = prefixedIdSchema("log");
 export const instanceIdSchema = prefixedIdSchema("srv");
+export const sshKeyIdSchema = prefixedIdSchema("key");
 
 export const sshPublicKeySchema = z
   .string()
@@ -52,6 +53,23 @@ export const functionRowSchema = z.object({
   deleted_at: z.string().nullable(), // soft delete — history stays attributable
 });
 export type FunctionRow = z.infer<typeof functionRowSchema>;
+
+// ---- ssh keys (saved public keys for server creation) ----
+export const sshKeyRowSchema = z.object({
+  id: sshKeyIdSchema,
+  name: functionNameSchema,
+  public_key: z.string(),
+  user_id: z.string().nullable(),
+  created_at: z.string(),
+  deleted_at: z.string().nullable(),
+});
+export type SshKeyRow = z.infer<typeof sshKeyRowSchema>;
+
+export const sshKeyCreateSchema = z.object({
+  name: functionNameSchema,
+  public_key: sshPublicKeySchema,
+});
+export type SshKeyCreate = z.infer<typeof sshKeyCreateSchema>;
 
 // ---- instances (long-lived SSH-able VMs) ----
 export const instanceStateSchema = z.enum([

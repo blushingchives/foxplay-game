@@ -12,6 +12,8 @@ export default function Sidebar() {
     details = "Server details";
   } else if (pathname === "/friends") {
     details = "Your friends";
+  } else if (pathname === "/ssh-keys") {
+    details = "Your SSH keys";
   } else if (pathname === "/functions") {
     details = "Your functions";
   } else if (pathname === "/functions/create") {

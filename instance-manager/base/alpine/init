@@ -20,8 +20,12 @@ for tok in $(cat /proc/cmdline); do
 done
 client=$(echo "$iparg" | cut -d: -f1)
 gw=$(echo "$iparg" | cut -d: -f3)
+host=$(echo "$iparg" | cut -d: -f5)
 dev=$(echo "$iparg" | cut -d: -f6)
 [ -n "$dev" ] || dev=eth0
+
+# name the guest after the instance id (field 5 of ip=)
+[ -n "$host" ] && hostname "$host"
 
 ip link set "$dev" up
 [ -n "$client" ] && ip addr add "$client/24" dev "$dev" 2>/dev/null

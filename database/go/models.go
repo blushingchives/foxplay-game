@@ -68,6 +68,15 @@ type InvocationsRow struct {
 	ID string `json:"id" db:"id"`
 }
 
+type SshKeysRow struct {
+	ID string `json:"id" db:"id"`
+	Name string `json:"name" db:"name"`
+	PublicKey string `json:"public_key" db:"public_key"`
+	UserID *string `json:"user_id" db:"user_id"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	DeletedAt *time.Time `json:"deleted_at" db:"deleted_at"`
+}
+
 type UsersRow struct {
 	ID string `json:"id" db:"id"`
 	Email *string `json:"email" db:"email"`
